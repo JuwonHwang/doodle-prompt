@@ -1,0 +1,32 @@
+{
+  "name": "doodle-prompt",
+  "version": "0.1.0",
+  "description": "Doodle your ideas. Don't type them. A shared canvas you and your coding agent sketch on together.",
+  "author": "JuwonHwang",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JuwonHwang/doodle-prompt.git"
+  },
+  "homepage": "https://github.com/JuwonHwang/doodle-prompt#readme",
+  "type": "module",
+  "bin": {
+    "doodle-prompt": "src/doodle.mjs"
+  },
+  "files": [
+    "src/",
+    "README.ko.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "sketch",
+    "canvas",
+    "drawing",
+    "visual-prompt",
+    "wireframe",
+    "claude-code",
+    "agent"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "doodle-prompt",
+  "owner": {
+    "name": "JuwonHwang"
+  },
+  "description": "Doodle your ideas. Don't type them.",
+  "plugins": [
+    {
+      "name": "doodle-prompt",
+      "source": "./",
+      "description": "Doodle your ideas. Don't type them. A shared canvas where you and Claude sketch back and forth."
+    }
+  ]
+}
