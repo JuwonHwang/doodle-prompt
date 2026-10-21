@@ -17,6 +17,8 @@ const CANVAS_PNG = path.join(DATA_DIR, 'canvas.png');
 const SENT_PNG = path.join(DATA_DIR, 'sent.png');
 const DEFAULT_PORT = Number(process.env.DOODLE_PORT || 4777);
 const CANVAS = { width: 1200, height: 800 };
+// How long the window may stay closed before a waiting agent is told; covers a reload or a slow first open.
+const CLOSE_GRACE_MS = 8000;
 const SHAPE_TYPES = new Set(['stroke', 'line', 'arrow', 'polygon', 'rect', 'ellipse', 'text']);
 
 // ---------------------------------------------------------------- server
@@ -26,7 +28,7 @@ function serve() {
   // Keep sketches out of the user's git history without touching their .gitignore.
   fs.writeFileSync(path.join(DATA_DIR, '.gitignore'), '*\n');
 
-  let state = { version: 0, nextId: 1, items: [], say: null };
+  let state = { version: 0, nextId: 1, items: [], say: null, ask: false };
   try { state = { ...state, ...JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) }; } catch {}
   const history = [];
   let snapshotVersion = -1;
@@ -34,9 +36,10 @@ function serve() {
   const waiters = new Set();
   const snapshotWaiters = new Set();
   const clients = new Set();
+  let closedAt = null;  // when the last canvas window disconnected; null while one is open or none has been yet
 
   const publicState = () => ({
-    version: state.version, items: state.items, say: state.say,
+    version: state.version, items: state.items, say: state.say, ask: state.ask,
     canvas: CANVAS, waiting: waiters.size > 0, viewers: clients.size,
   });
 
@@ -74,7 +77,10 @@ function serve() {
       state.items.push({ ...shape, id, author });
       ids.push(id);
     }
-    if (body.say !== undefined) state.say = body.say ? String(body.say) : null;
+    if (body.say !== undefined) {
+      state.say = body.say ? String(body.say) : null;
+      state.ask = Boolean(body.ask && state.say);
+    }
     commit();
     return ids;
   }
@@ -86,7 +92,7 @@ function serve() {
       note: batch.map((s) => s.note).filter(Boolean).join('\n'),
       png: SENT_PNG, version: state.version, sends: batch.length,
     };
-    for (const w of waiters) w(result);
+    for (const w of [...waiters]) w(result);
     waiters.clear();
     broadcast();
   }
@@ -128,14 +134,24 @@ function serve() {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
         res.write(`data: ${JSON.stringify(publicState())}\n\n`);
         clients.add(res);
+        closedAt = null;
         broadcast();
         const ping = setInterval(() => res.write(': ping\n\n'), 20000);
-        req.on('close', () => { clearInterval(ping); clients.delete(res); broadcast(); });
+        req.on('close', () => {
+          clearInterval(ping);
+          clients.delete(res);
+          if (!clients.size) closedAt = Date.now();
+          broadcast();
+        });
         return;
       }
       if (req.method === 'POST' && url.pathname === '/api/ops') {
         const ids = applyOps(await readBody(req));
         return json(res, 200, { version: state.version, ids });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/opening') {
+        if (!clients.size) closedAt = Date.now();
+        return json(res, 200, { ok: true });
       }
       if (req.method === 'POST' && url.pathname === '/api/undo') {
         const prev = history.pop();
@@ -154,6 +170,7 @@ function serve() {
         writePng(SENT_PNG, body.png);
         writePng(CANVAS_PNG, body.png);
         pendingSends.push({ note: String(body.note || '').trim(), at: Date.now() });
+        if (state.ask) { state.ask = false; commit(); }
         flushSends();
         return json(res, 200, { ok: true, delivered: pendingSends.length === 0 });
       }
@@ -196,6 +213,14 @@ function serve() {
       json(res, 400, { error: e.message });
     }
   });
+
+  // A waiting agent should not keep listening to a canvas nobody has open.
+  setInterval(() => {
+    if (!waiters.size || closedAt === null || Date.now() - closedAt < CLOSE_GRACE_MS) return;
+    for (const w of [...waiters]) w({ closed: true });
+    waiters.clear();
+    broadcast();
+  }, 1000).unref();
 
   const listen = (port) => {
     server.once('error', (e) => {
@@ -290,7 +315,7 @@ async function start(flags) {
   const { viewers } = await api('GET', '/api/state');
   if (!flags['no-open']) {
     if (viewers > 0 && !flags.force) console.log('Canvas window is already open.');
-    else openWindow(url, { tab: Boolean(flags.tab) });
+    else { await api('POST', '/api/opening'); openWindow(url, { tab: Boolean(flags.tab) }); }
   }
   console.log(`Canvas: ${url}`);
   console.log(`Data:   ${DATA_DIR}`);
@@ -335,6 +360,7 @@ async function wait(flags) {
   while (Date.now() < deadline) {
     const chunk = Math.max(1, Math.min(25, Math.ceil((deadline - Date.now()) / 1000)));
     const r = await api('GET', `/api/wait?timeout=${chunk}`);
+    if (r.closed) return console.log('The canvas window was closed.');
     if (!r.timeout) return report(r);
   }
   console.log('No send before timeout. Run `wait` again to keep listening.');

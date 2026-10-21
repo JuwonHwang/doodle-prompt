@@ -22,14 +22,19 @@ Data lives in `.doodle/` under the current working directory (it ignores itself 
 1. **Start**: `doodle start`. It opens the canvas as its own app window (or reuses the one already open) and prints the URL. Tell the user the URL in one line and say you're listening.
 2. **Listen**: run `doodle wait` with Bash `run_in_background: true`. You're re-invoked when the user presses Send, and the conversation stays free while they draw. Never poll, and keep exactly one `wait` running: start a new one only after the previous one has exited.
 3. **Read**: the wait output gives the user's note, the image path, and every item with its id and bounds. Open the image with Read. Use both the picture (what it looks like) and the item list (exact positions, ids).
-4. **Interpret in context**: decide what the sketch means given the conversation and repo: a UI layout, a flow, a data model, an architecture, a game level, an annotation of something. If it's ambiguous, make your best reading and say it in one line. Don't stack up questions; ask by drawing (see below).
-5. **Answer on the canvas**, then in chat in a sentence or two. Pick what moves the sketch forward:
+4. **Interpret in context**: decide what the sketch means given the conversation and repo: a UI layout, a flow, a data model, an architecture, a game level, an annotation of something. Don't stack up questions; ask by drawing (see below).
+5. **Confirm your reading**: say back what you understood, in one short sentence ending in a question, as a `say` bubble with `"ask": true` (for example "A login screen that leads to a dashboard, right?"). That puts **Yes** / **Not quite** buttons on the bubble, so the user can answer with one click. Repeat the same sentence in chat. Do this on the first send of a session, whenever the sketch is ambiguous, and before you replace the user's strokes or build anything outside the canvas. Skip it for small follow-ups whose meaning is obvious, such as a check mark on an option you offered.
+   - When you're unsure, don't remove the user's strokes yet: draw your reading next to them and remove theirs after a **Yes**.
+   - A send whose note starts with `yes` or `no` is an answer from those buttons; anything after the dash is what the user typed with it. On `no`, look again, offer a different reading or a choice between two, and ask again.
+6. **Answer on the canvas**, then in chat in a sentence or two. Pick what moves the sketch forward:
    - **Clean up**: redraw rough strokes as clear shapes with labels, then remove the user's strokes you replaced. Only replace what you're confident about.
    - **Extend**: add the missing piece, a next step, an alternative next to theirs.
    - **Ask by drawing**: a dashed box with `?`, an arrow with a question, two small options side by side.
    - **Comment**: `say` puts a short speech bubble at the top of the canvas. Keep it under ~15 words.
-6. **Check your work**: `draw` prints the refreshed `canvas.png`. Read it when the layout is non-trivial, and fix overlaps.
-7. **Listen again**: start another background `wait`. Repeat until the user stops sending or asks you to build the thing.
+7. **Check your work**: `draw` prints the refreshed `canvas.png`. Read it when the layout is non-trivial, and fix overlaps.
+8. **Listen again**: start another background `wait`. Repeat until the user stops sending or asks you to build the thing.
+
+**When `wait` prints "The canvas window was closed."**, the user is done drawing for now. Don't start another `wait`. Run `doodle stop`, and tell the user in one line that the canvas is closed and they can ask to draw again any time. The sketch is kept in `.doodle/`, so a later `doodle start` reopens it as it was.
 
 **While a canvas session is going, when the user types in chat instead**, run `doodle check` first. It returns any send that arrived while no `wait` was listening (for example after a restart). If the user says "look", "check the canvas" or similar (in any language) and `check` has nothing, read `.doodle/canvas.png`: it always holds the current canvas.
 
@@ -66,7 +71,7 @@ Shapes (all coordinates in the 1200 × 800 space):
 
 Optional on any shape: `color` (default Claude orange, so the user can tell your marks from theirs), `width`, `dashed`, `fill` (e.g. `"rgba(201,100,66,.08)"`), `size` for label text.
 
-Top-level keys: `add`, `remove` (ids from `state`/`wait` output), `clear` (`"claude"`, `"user"`, or `"all"`), `say` (string, or `null` to hide the bubble).
+Top-level keys: `add`, `remove` (ids from `state`/`wait` output), `clear` (`"claude"`, `"user"`, or `"all"`), `say` (string, or `null` to hide the bubble), `ask` (`true` adds **Yes** / **Not quite** buttons to that bubble; they go away once the user sends).
 
 Other commands:
 

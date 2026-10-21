@@ -28,8 +28,14 @@
 
   #bubble { position: absolute; top: 12px; left: 12px; max-width: min(420px, 70%);
     background: var(--chrome); border: 1px solid var(--line); border-left: 3px solid var(--accent);
-    border-radius: 8px; padding: 8px 12px; box-shadow: var(--shadow); white-space: pre-wrap; display: none; }
+    border-radius: 8px; padding: 8px 12px; box-shadow: var(--shadow); display: none; }
+  #bubbleText { white-space: pre-wrap; }
   #bubble b { color: var(--accent); font-weight: 600; margin-right: 6px; }
+  #answers { display: none; gap: 6px; margin-top: 8px; }
+  #answers.show { display: flex; }
+  #answers button { height: 30px; border: 1px solid var(--line); background: var(--paper); }
+  #answers button:hover { background: #efede6; }
+  #answers .yes { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
   #textInput { position: absolute; display: none; font: 24px ui-sans-serif, system-ui, sans-serif;
     border: 1px dashed var(--muted); background: rgba(255,255,255,.9); padding: 0 4px; outline: none; min-width: 120px; }
@@ -60,7 +66,9 @@
 <body>
 <div id="stage"><div id="wrap">
   <canvas id="paper"></canvas>
-  <div id="bubble"><b>Claude</b><span id="bubbleText"></span></div>
+  <div id="bubble"><b>Claude</b><span id="bubbleText"></span>
+    <div id="answers"><button class="yes" data-answer="yes">Yes</button><button data-answer="no">Not quite</button></div>
+  </div>
   <input id="textInput" type="text" spellcheck="false">
 </div></div>
 
@@ -314,6 +322,7 @@ function applyState(next) {
   pending = pending.filter((p) => p.version === null || p.version > state.version);
   $('bubble').style.display = state.say ? 'block' : 'none';
   $('bubbleText').textContent = state.say || '';
+  $('answers').classList.toggle('show', Boolean(state.ask));
   $('status').classList.toggle('on', state.waiting);
   $('status').querySelector('span').textContent = state.waiting ? 'Claude is listening' : "Claude isn't listening";
   render();
@@ -458,13 +467,15 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 1800);
 }
 
-async function send() {
-  const note = $('note').value;
+async function send(answer) {
+  const typed = $('note').value.trim();
+  const note = answer ? [answer, typed].filter(Boolean).join(' — ') : typed;
   const r = await post('/api/send', { png: snapshot(), note });
   $('note').value = '';
   toast(r.delivered ? 'Sent to Claude' : 'Saved. Claude will see it next time it listens');
 }
-$('send').addEventListener('click', send);
+$('send').addEventListener('click', () => send());
+document.querySelectorAll('[data-answer]').forEach((b) => b.addEventListener('click', () => send(b.dataset.answer)));
 $('note').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
 });
