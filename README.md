@@ -17,12 +17,12 @@ you:     (circle the ?, scribble a chart)
 ## How it works
 
 1. Say `/doodle` (or "let me draw it") in Claude Code. The canvas opens in its own window. Put it next to your terminal.
-2. Draw. Pen, eraser, text. That's all you need.
+2. Draw. Pen, shapes, text, and a select tool to move things around. Pick a line width and color, split the sketch into layers you can reorder, hide, rename or delete, and paste in screenshots or text.
 3. Press **Send to Claude**. Add a few words if you like, but you don't have to.
 4. Claude reads the sketch in the context of your conversation and your repo, then draws on the same canvas: it cleans up rough shapes, adds the missing piece, or asks a question with a dashed `?` box.
 5. Keep going. When the idea is clear, ask Claude to build it.
 
-Claude's marks are orange, yours stay in your ink, so you always know who drew what. Undo works on anyone's changes.
+The agent's marks are violet, yours stay in your ink, so you always know who drew what. Undo works on anyone's changes.
 
 ## Install
 
@@ -54,13 +54,14 @@ npx doodle-prompt draw -  # draw shapes from JSON on stdin
 - The canvas opens as a chromeless Chrome/Edge app window when one is installed (set `DOODLE_BROWSER` to pick another), else as a normal tab. `start --tab` forces a tab.
 - Claude listens with a background command, so you can keep chatting while you draw. The status dot in the toolbar shows whether Claude is listening; sends made while it isn't are queued and picked up next time.
 
-Keyboard: `P` pen, `E` eraser, `T` text, `Ctrl/⌘+Z` undo, `Ctrl/⌘+Enter` send.
+Keyboard: `V` select, `P` pen, `E` eraser, `T` text, `R` rectangle, `O` ellipse, `A` arrow, `F` fill, `L` layers, `C` chat panel, `Ctrl/⌘ +`/`-`/`0` zoom in, out, fit, `Space`+drag pan, `Delete` remove selection, `Ctrl/⌘+Z` undo, `Ctrl/⌘+Shift+Z` redo, `Ctrl/⌘+C`/`X`/`V` copy, cut, paste, `Ctrl/⌘+Enter` send.
 
 ## Layout
 
 ```
-src/doodle.mjs                    canvas server + CLI (start, wait, check, draw, state, undo, clear, stop)
+src/doodle.mjs                    canvas server + CLI (start, wait, check, draw, state, undo, redo, clear, stop)
 src/canvas.html                   the canvas
+src/icon*.svg, icon-*.png       app icon (tab, window, taskbar)
 package.json                      npm package (bin: doodle-prompt)
 .claude-plugin/plugin.json        Claude Code plugin manifest
 .claude-plugin/marketplace.json   lets this repo be added as a marketplace

@@ -4,99 +4,375 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>doodle-prompt</title>
+<link rel="icon" type="image/svg+xml" sizes="any" href="/icon-small.svg">
+<link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/icon-48.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<!-- Tints the app window's title bar to match the page (the OS still draws its shape and buttons). -->
+<meta name="theme-color" content="#fff6df" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17161c" media="(prefers-color-scheme: dark)">
 <style>
+  /* Sketchbook neubrutalism: cream paper, hard ink outlines and offset shadows, marker-color accents. */
   :root {
-    --bg: #ecebe6;
+    --bg: #fff6df;          /* sketchbook cover around the page */
     --paper: #ffffff;
-    --ink: #1f2328;
-    --muted: #6b6b66;
-    --line: #d9d7cf;
-    --chrome: #fbfaf7;
-    --accent: #c96442;
-    --ok: #2e9e5b;
-    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 6px 20px rgba(0,0,0,.08);
+    --ink: #141414;
+    --muted: #5c5a52;
+    --edge: #141414;        /* outlines */
+    --drop: #141414;        /* offset shadows */
+    --chrome: #fffdf6;
+    --field: #ffffff;
+    --hover: #fff1c2;
+    --marker: #ffd23f;      /* highlighter yellow: primary actions, selection */
+    --agent: #6c4cf5;       /* the agent's ink and voice */
+    --agent-soft: #efeaff;
+    --coral: #ff6b6b;       /* destructive */
+    --mint: #3ddc97;        /* listening */
+    --focus: #2f6fde;
+    --dot: rgba(20,20,20,.13);
+    --b: 2.5px;             /* outline width */
+    --r: 10px;
+    --font: "Nunito", ui-rounded, "SF Pro Rounded", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  }
+  /* Dark sketchbook: the page stays white so ink reads the same for you and the agent. */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17161c; --ink: #f4f1e8; --muted: #b3afa3; --edge: #f4f1e8; --drop: #000000;
+      --chrome: #201f27; --field: #17161c; --hover: #2d2a1d; --agent-soft: #2a2442; --dot: rgba(244,241,232,.10);
+    }
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
-    font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
-  #stage { position: absolute; inset: 0 0 76px 0; display: grid; place-items: center; }
+  html, body { margin: 0; height: 100%; color: var(--ink); font: 500 14px/1.45 var(--font); overflow: hidden;
+    background: var(--bg); }
+  body { display: flex; flex-direction: column; }
+  #main { flex: 1; min-height: 0; display: flex; }
+  /* Canvas and toolbar on the left, the chat panel full height on the right, so their edges line up. */
+  #left { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  /* The stage scrolls when zoomed in; overlays (layers, toast, zoom) sit on the fixed box around it. */
+  #stageBox { position: relative; flex: 1; min-width: 0; min-height: 0; }
+  #stage { position: absolute; inset: 0; overflow: auto; display: flex; }
+  #wrap { margin: auto; padding: 16px; }
+  #stage.panning, #stage.panning #paper { cursor: grabbing; }
+  #stage.space #paper { cursor: grab; }
+  #view { position: absolute; left: 14px; bottom: 14px; z-index: 2; display: flex; align-items: center; gap: 4px;
+    padding: 4px 6px; background: var(--chrome); border: var(--b) solid var(--edge); border-radius: 12px; box-shadow: 3px 3px 0 var(--drop);
+    font-size: 12px; font-weight: 800; }
+  #view label { display: flex; align-items: center; gap: 3px; color: var(--muted); }
+  #view input::-webkit-inner-spin-button, #view input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  #view input { -moz-appearance: textfield; width: 60px; height: 28px; font: inherit; font-weight: 700; color: var(--ink); background: var(--field);
+    border: 2px solid var(--edge); border-radius: 6px; padding: 0 4px; text-align: right; }
+  #view button { height: 28px; min-width: 28px; padding: 0 6px; }
+  #zoomLabel { min-width: 52px !important; font-variant-numeric: tabular-nums; }
+  .vsep { width: 2px; height: 18px; background: var(--edge); opacity: .25; margin: 0 2px; }
+
+  /* ---------- the page */
   #wrap { position: relative; }
-  #paper { display: block; background: var(--paper); border-radius: 6px; box-shadow: var(--shadow);
-    touch-action: none; cursor: crosshair; }
+  #paper { display: block; background: var(--paper); border: var(--b) solid var(--edge); border-radius: 6px;
+    box-shadow: 6px 6px 0 var(--drop); touch-action: none; cursor: crosshair; }
   #paper.eraser { cursor: cell; }
   #paper.text { cursor: text; }
+  #paper.select { cursor: default; }
+  #paper.fill { cursor: copy; }
+  #paper.lasso { cursor: crosshair; }
+  #selbar { position: absolute; z-index: 2; display: none; gap: 2px; padding: 3px; background: var(--chrome);
+    border: 2px solid var(--edge); border-radius: 10px; box-shadow: 3px 3px 0 var(--drop); }
+  #selbar.show { display: flex; }
+  #selbar button { height: 30px; min-width: 30px; padding: 0 6px; border-width: 0; }
+  #selbar #selDel:hover { background: var(--coral); }
+  #paper.moving { cursor: move; }
 
-  #bubble { position: absolute; top: 12px; left: 12px; max-width: min(420px, 70%);
-    background: var(--chrome); border: 1px solid var(--line); border-left: 3px solid var(--accent);
-    border-radius: 8px; padding: 8px 12px; box-shadow: var(--shadow); display: none; }
-  #bubbleText { white-space: pre-wrap; }
-  #bubble b { color: var(--accent); font-weight: 600; margin-right: 6px; }
-  #answers { display: none; gap: 6px; margin-top: 8px; }
+  /* ---------- buttons */
+  button { font: inherit; font-weight: 700; color: var(--ink); background: transparent; cursor: pointer;
+    height: 38px; min-width: 38px; padding: 0 10px; border: var(--b) solid transparent; border-radius: var(--r);
+    transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease; }
+  button:hover { background: var(--hover); }
+  button[aria-pressed="true"] { background: var(--marker); color: #141414; border-color: var(--edge); box-shadow: 2px 2px 0 var(--drop); }
+  /* Chunky buttons press down into their shadow. */
+  .chunky { background: var(--chrome); border-color: var(--edge); box-shadow: 3px 3px 0 var(--drop); }
+  .chunky:hover { background: var(--hover); transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--drop); }
+  .chunky:active, button[aria-pressed="true"]:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--drop); }
+  button:disabled { opacity: .55; cursor: progress; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .lrow:focus-within { outline: 2px solid transparent; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } .chunky:hover, .chunky:active { transform: none; } }
+  @media (pointer: coarse) {
+    button { height: 44px; min-width: 44px; }
+    .swatch { width: 30px; height: 30px; min-width: 30px; }
+    .lrow button { height: 40px; min-width: 40px; }
+    .lrow .del { visibility: visible; }
+  }
+  .ic { width: 19px; height: 19px; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2.2;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .ic.sm { width: 15px; height: 15px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ---------- toolbar: a strip of paper taped to the bottom */
+  #bar { flex-shrink: 0; min-height: 74px; justify-content: center; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+    padding: 12px 18px; background: var(--chrome); border-top: var(--b) solid var(--edge); }
+  .group { display: flex; gap: 2px; align-items: center; }
+  /* Compact toolbar so it stays on one row beside the chat panel; it still wraps on narrow windows. */
+  #bar { gap: 8px 12px; padding: 12px 14px; }
+  #bar button { height: 38px; min-width: 36px; padding: 0 8px; }
+  #bar .group[aria-label="Colors"] { gap: 5px; }
+  #bar .swatch { width: 22px; height: 22px; min-width: 22px; }
+  #width { width: 80px; }
+  .sep { width: var(--b); height: 26px; background: var(--edge); border-radius: 2px; opacity: .25; }
+  .swatch { width: 24px; height: 24px; min-width: 24px; padding: 0; border-radius: 50%; border: 2px solid var(--edge); }
+  .swatch:hover { transform: translateY(-2px); }
+  .swatch[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--chrome), 0 0 0 5.5px var(--edge); }
+  .swatch.custom { display: inline-block; position: relative; cursor: pointer; overflow: hidden;
+    background: conic-gradient(#ff6b6b, #ffd23f, #3ddc97, #2f6fde, #6c4cf5, #ff6b6b); }
+  .swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  #widthGroup { gap: 8px; }
+  #width { width: 96px; accent-color: var(--ink); }
+  #widthDot { width: 24px; height: 24px; display: grid; place-items: center; }
+  #widthDot i { display: block; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 1.5px var(--chrome), 0 0 0 2.5px var(--edge); }
+
+  /* ---------- chat panel */
+  #side { position: relative; width: var(--side-w, 310px); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;
+    background: var(--chrome); border-left: var(--b) solid var(--edge); }
+  /* Drag the left edge to resize. */
+  #sideGrip { position: absolute; left: -6px; top: 0; bottom: 0; width: 10px; cursor: col-resize; z-index: 3; }
+  #sideGrip:hover, #sideGrip.dragging, #sideGrip:focus-visible { background: linear-gradient(90deg, transparent 3px, var(--marker) 3px, var(--marker) 7px, transparent 7px); outline: none; }
+  #sideToggle .ic { transition: transform .2s ease; }
+  /* Collapsed: a slim rail that keeps the listening status and Send in reach. */
+  #side.collapsed { width: 60px; }
+  #side.collapsed #sideToggle .ic { transform: rotate(180deg); }
+  #side.collapsed header { flex-direction: column; padding: 12px 0; gap: 10px; }
+  #side.collapsed header > .ic, #side.collapsed header b, #side.collapsed #clearChat,
+  #side.collapsed #chat, #side.collapsed #answers, #side.collapsed #note, #side.collapsed #sideGrip { display: none; }
+  #side.collapsed #composer { margin-top: auto; justify-content: center; padding: 11px 0; }
+  #side.collapsed #send { width: 40px; height: 40px; }
+  #sideToggle.has-ask::after { content: ''; position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--coral); border: 2px solid var(--edge); }
+  #sideToggle { position: relative; }
+  #side header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: var(--b) solid var(--edge); }
+  #side header > .ic { color: #fff; background: var(--agent); border: 2px solid var(--edge); border-radius: 8px;
+    width: 30px; height: 30px; padding: 4px; box-shadow: 2px 2px 0 var(--drop); }
+  #side header b { flex: 1; font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+  #side header .hbtn, #status { width: 32px; height: 32px; min-width: 32px; padding: 0; display: grid; place-items: center;
+    border: 2px solid var(--edge); border-radius: 8px; background: var(--chrome); box-shadow: 2px 2px 0 var(--drop); }
+  #side header .hbtn:hover { background: var(--coral); }
+  #chat { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { position: relative; max-width: 92%; padding: 9px 12px; border: 2px solid var(--edge); border-radius: 14px;
+    white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: 3px 3px 0 var(--drop); }
+  .msg.new { animation: pop .22s ease-out; }
+  .msg.agent { align-self: flex-start; background: var(--agent-soft); border-bottom-left-radius: 4px; }
+  .msg.user { align-self: flex-end; background: var(--marker); color: #141414; border-bottom-right-radius: 4px; }
+  .msg.user.sketch-only { background: transparent; color: var(--muted); border: 0; box-shadow: none; font-size: 12px; padding: 0 2px; }
+  .msg.user.has-img { padding: 6px; }
+  .msg img { display: block; width: 100%; max-width: 220px; border: 2px solid var(--edge); border-radius: 8px; background: #fff;
+    cursor: zoom-in; margin-bottom: 4px; }
+  .msg .mdel { position: absolute; top: -10px; right: -10px; height: 24px; min-width: 24px; padding: 0; border-radius: 50%;
+    background: var(--chrome); border: 2px solid var(--edge); color: var(--ink); display: none; }
+  .msg .mdel:hover { background: var(--coral); }
+  .msg:hover .mdel, .msg .mdel:focus-visible { display: inline-flex; align-items: center; justify-content: center; }
+  @media (pointer: coarse) { .msg .mdel { display: inline-flex; align-items: center; justify-content: center; } }
+  @keyframes pop { from { transform: translateY(6px) scale(.97); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .msg.new { animation: none; } }
+  .chat-empty { color: var(--muted); font-size: 13px; margin: auto; text-align: center; max-width: 220px; }
+  #answers { display: none; gap: 8px; padding: 0 14px 12px; }
   #answers.show { display: flex; }
-  #answers button { height: 30px; border: 1px solid var(--line); background: var(--paper); }
-  #answers button:hover { background: #efede6; }
-  #answers .yes { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  #answers .yes { background: var(--mint); color: #141414; }
+  #composer { display: flex; gap: 10px; align-items: stretch; min-height: 74px; padding: 11px 14px; border-top: var(--b) solid var(--edge); }
+  #note { flex: 1; min-width: 0; height: 52px; resize: none; font: inherit; color: var(--ink); background: var(--field);
+    border: 2px solid var(--edge); border-radius: var(--r); padding: 9px 12px; }
+  #note:focus { box-shadow: 3px 3px 0 var(--marker); outline: none; }
+  #note:focus-visible { outline: none; }
+  #send { width: 52px; height: auto; padding: 0; background: var(--marker); color: #141414; }
+  #send .ic { width: 21px; height: 21px; }
+  /* Listening: mint headphones. Busy: hourglass. The words are in the tooltip. */
+  #status { color: var(--muted); }
+  #status .ic { width: 17px; height: 17px; }
+  #status.on { color: #141414; background: var(--mint); animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(61,220,151,.28); } }
+  @media (prefers-reduced-motion: reduce) { #status.on { animation: none; } }
+  #status .on-icon, #status.on .off-icon { display: none; }
+  #status.on .on-icon { display: inline; }
+  @media (max-width: 760px) {
+    #main { flex-direction: column; }
+    #side { width: auto; height: 230px; border-left: 0; border-top: var(--b) solid var(--edge); }
+    #sideGrip { display: none; }
+    #side.collapsed { width: auto; height: auto; }
+    #side.collapsed header { flex-direction: row; padding: 8px 14px; }
+  }
 
-  #textInput { position: absolute; display: none; font: 24px ui-sans-serif, system-ui, sans-serif;
-    border: 1px dashed var(--muted); background: rgba(255,255,255,.9); padding: 0 4px; outline: none; min-width: 120px; }
+  /* ---------- layers: a sticky note on the page */
+  #layers { position: absolute; top: 14px; right: 14px; width: 216px; max-height: calc(100% - 28px); overflow-y: auto;
+    background: #fff8c9; color: #141414; border: var(--b) solid #141414; border-radius: 6px; box-shadow: 4px 4px 0 #141414;
+    padding: 8px; display: none; z-index: 2; transform: rotate(.6deg); }
+  #layers.open { display: block; }
+  #layers button { color: #141414; }
+  #layers button:hover { background: rgba(0,0,0,.07); }
+  .lrow { display: flex; align-items: center; gap: 2px; border: 2px solid transparent; border-radius: 8px; padding: 0 2px; cursor: pointer; }
+  .lrow:hover { background: rgba(0,0,0,.05); }
+  .lrow.active { background: #fff; border-color: #141414; }
+  .lrow.drop-above { box-shadow: inset 0 3px 0 var(--agent); }
+  .lrow.drop-below { box-shadow: inset 0 -3px 0 var(--agent); }
+  .lrow button { height: 28px; min-width: 28px; padding: 0 4px; border-width: 0; }
+  .lrow .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 2px; font-weight: 700; }
+  .lrow input { flex: 1; min-width: 0; font: inherit; border: 2px solid #141414; border-radius: 6px; padding: 2px 4px; }
+  .lrow.hidden .name { color: #8a8678; text-decoration: line-through; }
+  .lrow .agent { color: var(--agent); display: inline-flex; }
+  .lrow .del, .lrow .ren { visibility: hidden; }
+  .lrow:hover .del, .lrow.active .del, .lrow .del:focus-visible,
+  .lrow:hover .ren, .lrow.active .ren, .lrow .ren:focus-visible { visibility: visible; }
+  @media (pointer: coarse) { .lrow .ren { visibility: visible; } }
+  #addLayer { width: 100%; display: flex; align-items: center; gap: 6px; justify-content: flex-start; height: 32px; margin-top: 4px;
+    border: 2px dashed #141414; border-radius: 8px; color: #141414; }
 
-  #bar { position: absolute; left: 0; right: 0; bottom: 0; height: 76px; display: flex; gap: 12px;
-    align-items: center; padding: 0 16px; background: var(--chrome); border-top: 1px solid var(--line); }
-  .group { display: flex; gap: 4px; align-items: center; }
-  .sep { width: 1px; height: 28px; background: var(--line); }
-  button { font: inherit; border: 1px solid transparent; background: transparent; color: var(--ink);
-    height: 36px; min-width: 36px; padding: 0 10px; border-radius: 8px; cursor: pointer; }
-  button:hover { background: #efede6; }
-  button[aria-pressed="true"] { background: #e6e3da; border-color: var(--line); }
-  .swatch { width: 22px; height: 22px; min-width: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
-  .swatch[aria-pressed="true"] { border-color: var(--ink); }
-  #note { flex: 1; min-width: 120px; height: 40px; resize: none; border: 1px solid var(--line); border-radius: 8px;
-    padding: 9px 12px; font: inherit; background: var(--paper); color: var(--ink); }
-  #send { background: var(--accent); color: #fff; font-weight: 600; padding: 0 16px; height: 40px; }
-  #send:hover { filter: brightness(1.05); background: var(--accent); }
-  #status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-  #status i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); display: inline-block; }
-  #status.on i { background: var(--ok); }
-  #toast { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff;
-    padding: 6px 12px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; }
-  #toast.show { opacity: 1; }
-  @media (max-width: 720px) { #status span { display: none; } .hide-sm { display: none; } }
+  /* ---------- on-page text box, toast, hint */
+  #textInput { position: absolute; display: none; font: 24px var(--font); line-height: 1.25; resize: none; overflow: hidden;
+    white-space: pre; color: inherit; background: rgba(255,255,255,.92); border: 2px dashed var(--agent); border-radius: 4px;
+    padding: 0 4px; outline: none; min-width: 120px; }
+  #toast { position: absolute; bottom: 18px; left: 50%; transform: translate(-50%, 8px); background: var(--ink); color: var(--bg);
+    font-weight: 700; padding: 8px 14px; border-radius: 999px; opacity: 0; pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-2deg); color: #5c5a52;
+    font-size: 20px; font-weight: 800; pointer-events: none; display: none; align-items: center; gap: 8px; white-space: nowrap;
+    background: linear-gradient(transparent 55%, rgba(255,210,63,.55) 55%); padding: 0 6px; }
+  #hint.show { display: flex; }
+
+  /* ---------- dialogs */
+  #viewer { padding: 0; border: 0; background: transparent; max-width: 92vw; max-height: 92vh; }
+  #viewer::backdrop, #confirmBox::backdrop { background: rgba(20,20,20,.45); }
+  #viewer button { padding: 0; height: auto; background: transparent; border: 0; cursor: zoom-out; }
+  #viewer img { display: block; max-width: 92vw; max-height: 92vh; border: var(--b) solid #141414; border-radius: 8px;
+    background: #fff; box-shadow: 8px 8px 0 #141414; }
+  #confirmBox { color: var(--ink); background: var(--chrome); border: var(--b) solid var(--edge); border-radius: 14px;
+    box-shadow: 6px 6px 0 var(--drop); padding: 18px 20px; max-width: 360px; }
+  #confirmBox h2 { margin: 0 0 6px; font-size: 16px; font-weight: 800; }
+  #confirmBox p { margin: 0 0 16px; }
+  #confirmBox form { display: flex; justify-content: flex-end; gap: 10px; }
+  #confirmBox button[value="ok"] { background: var(--coral); color: #141414; }
+  @media (max-width: 720px) { .sep { display: none; } }
 </style>
 </head>
 <body>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-select" viewBox="0 0 24 24"><path d="M4 4l7.07 17 2.51-7.39L21 11.07z"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-eraser" viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></symbol>
+  <symbol id="i-rect" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/></symbol>
+  <symbol id="i-ellipse" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
+  <symbol id="i-clear" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="M2 2l20 20"/></symbol>
+  <symbol id="i-fill" viewBox="0 0 24 24"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></symbol>
+  <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m13 17 5-5-5-5"/><path d="m6 17 5-5-5-5"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-lasso" viewBox="0 0 24 24"><path d="M7 22a5 5 0 0 1-2-4"/><path d="M3.3 14A6.8 6.8 0 0 1 2 10c0-4.4 4.5-8 10-8s10 3.6 10 8-4.5 8-10 8a12 12 0 0 1-5-1"/><path d="M5 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></symbol>
+  <symbol id="i-flip-h" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><path d="M12 20v2M12 14v2M12 8v2M12 2v2"/></symbol>
+  <symbol id="i-flip-v" viewBox="0 0 24 24"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/><path d="M4 12H2M10 12H8M16 12h-2M22 12h-2"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-agent" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+  <symbol id="i-listening" viewBox="0 0 24 24"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></symbol>
+  <symbol id="i-busy" viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></symbol>
+</svg>
+<div id="main">
+<div id="left">
+<div id="stageBox">
 <div id="stage"><div id="wrap">
   <canvas id="paper"></canvas>
-  <div id="bubble"><b>Claude</b><span id="bubbleText"></span>
-    <div id="answers"><button class="yes" data-answer="yes">Yes</button><button data-answer="no">Not quite</button></div>
+  <div id="selbar" role="toolbar" aria-label="Selection">
+    <button id="selFlipH" title="Flip horizontal" aria-label="Flip horizontal"><svg class="ic sm" aria-hidden="true"><use href="#i-flip-h"/></svg></button>
+    <button id="selFlipV" title="Flip vertical" aria-label="Flip vertical"><svg class="ic sm" aria-hidden="true"><use href="#i-flip-v"/></svg></button>
+    <button id="selRotate" title="Rotate 90°" aria-label="Rotate 90 degrees"><svg class="ic sm" aria-hidden="true"><use href="#i-rotate"/></svg></button>
+    <button id="selDup" title="Duplicate (Ctrl+D)" aria-label="Duplicate"><svg class="ic sm" aria-hidden="true"><use href="#i-copy"/></svg></button>
+    <button id="selDel" title="Delete (Del)" aria-label="Delete selection"><svg class="ic sm" aria-hidden="true"><use href="#i-clear"/></svg></button>
   </div>
-  <input id="textInput" type="text" spellcheck="false">
+  <textarea id="textInput" rows="1" spellcheck="false" aria-label="Text on the canvas"></textarea>
 </div></div>
-
+  <div id="layers" role="dialog" aria-label="Layers"><div id="layerList"></div>
+    <button id="addLayer" title="New layer"><svg class="ic sm" aria-hidden="true"><use href="#i-plus"/></svg>New layer</button></div>
+<div id="toast" role="status" aria-live="polite"></div><div id="hint" aria-hidden="true">Draw anything, then press <svg class="ic" aria-hidden="true"><use href="#i-send"/></svg></div>
+<div id="view" role="group" aria-label="Canvas size and zoom">
+  <label title="Canvas width">W<input id="cw" type="number" min="200" max="4000" step="10" aria-label="Canvas width"></label>
+  <span aria-hidden="true">×</span>
+  <label title="Canvas height">H<input id="ch" type="number" min="200" max="4000" step="10" aria-label="Canvas height"></label>
+  <span class="vsep"></span>
+  <button id="zoomOut" title="Zoom out (Ctrl+−)" aria-label="Zoom out"><svg class="ic sm" aria-hidden="true"><use href="#i-minus"/></svg></button>
+  <button id="zoomLabel" title="Fit to window (Ctrl+0)" aria-label="Fit to window">100%</button>
+  <button id="zoomIn" title="Zoom in (Ctrl++)" aria-label="Zoom in"><svg class="ic sm" aria-hidden="true"><use href="#i-plus"/></svg></button>
+</div>
+</div>
 <div id="bar">
   <div class="group" role="group" aria-label="Tools">
-    <button data-tool="pen" aria-pressed="true" title="Pen (P)">✎</button>
-    <button data-tool="eraser" aria-pressed="false" title="Eraser (E)">⌫</button>
-    <button data-tool="text" aria-pressed="false" title="Text (T)">T</button>
+    <button data-tool="select" aria-pressed="false" title="Select: drag a box, click a shape (V)" aria-label="Rectangle select"><svg class="ic" aria-hidden="true"><use href="#i-select"/></svg></button>
+    <button data-tool="lasso" aria-pressed="false" title="Free-form select (S)" aria-label="Free-form select"><svg class="ic" aria-hidden="true"><use href="#i-lasso"/></svg></button>
+    <button data-tool="pen" aria-pressed="true" title="Pen (P)" aria-label="Pen"><svg class="ic" aria-hidden="true"><use href="#i-pen"/></svg></button>
+    <button data-tool="eraser" aria-pressed="false" title="Eraser (E)" aria-label="Eraser"><svg class="ic" aria-hidden="true"><use href="#i-eraser"/></svg></button>
+    <button data-tool="text" aria-pressed="false" title="Text (T)" aria-label="Text"><svg class="ic" aria-hidden="true"><use href="#i-text"/></svg></button>
   </div>
-  <div class="group hide-sm" role="group" aria-label="Colors">
-    <button class="swatch" data-color="#1f2328" aria-pressed="true" style="background:#1f2328" title="Ink"></button>
-    <button class="swatch" data-color="#2f6fde" aria-pressed="false" style="background:#2f6fde" title="Blue"></button>
-    <button class="swatch" data-color="#d1453b" aria-pressed="false" style="background:#d1453b" title="Red"></button>
-    <button class="swatch" data-color="#2e9e5b" aria-pressed="false" style="background:#2e9e5b" title="Green"></button>
+  <div class="group" role="group" aria-label="Shapes">
+    <button data-tool="rect" aria-pressed="false" title="Rectangle (R)" aria-label="Rectangle"><svg class="ic" aria-hidden="true"><use href="#i-rect"/></svg></button>
+    <button data-tool="ellipse" aria-pressed="false" title="Ellipse (O)" aria-label="Ellipse"><svg class="ic" aria-hidden="true"><use href="#i-ellipse"/></svg></button>
+    <button data-tool="arrow" aria-pressed="false" title="Arrow (A)" aria-label="Arrow"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+    <button data-tool="fill" aria-pressed="false" title="Fill (F): paint bucket, floods same-colored pixels" aria-label="Fill"><svg class="ic" aria-hidden="true"><use href="#i-fill"/></svg></button>
   </div>
-  <div class="sep hide-sm"></div>
+  <div class="sep"></div>
+  <div class="group" id="widthGroup" role="group" aria-label="Line width">
+    <input id="width" type="range" min="1" max="20" step="1" value="3" title="Line width" aria-label="Line width">
+    <span id="widthDot" aria-hidden="true"><i></i></span>
+  </div>
+  <div class="group" role="group" aria-label="Colors">
+    <button class="swatch" data-color="#1f2328" aria-pressed="true" style="background:#1f2328" title="Ink" aria-label="Ink"></button>
+    <button class="swatch" data-color="#2f6fde" aria-pressed="false" style="background:#2f6fde" title="Blue" aria-label="Blue"></button>
+    <button class="swatch" data-color="#d1453b" aria-pressed="false" style="background:#d1453b" title="Red" aria-label="Red"></button>
+    <button class="swatch" data-color="#2e9e5b" aria-pressed="false" style="background:#2e9e5b" title="Green" aria-label="Green"></button>
+    <button class="swatch" data-color="#e8459b" aria-pressed="false" style="background:#e8459b" title="Pink" aria-label="Pink"></button>
+    <button class="swatch" data-color="#e0a800" aria-pressed="false" style="background:#e0a800" title="Yellow" aria-label="Yellow"></button>
+    <button class="swatch" data-color="#8b8b86" aria-pressed="false" style="background:#8b8b86" title="Gray" aria-label="Gray"></button>
+    <label class="swatch custom" title="Any color"><input id="customColor" type="color" value="#1f2328" aria-label="Any color"></label>
+  </div>
+  <div class="sep"></div>
   <div class="group">
-    <button id="undo" title="Undo (Ctrl+Z)">↶</button>
-    <button id="clear" title="Clear canvas">Clear</button>
+    <button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></button>
+    <button id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg class="ic" aria-hidden="true"><use href="#i-redo"/></svg></button>
+    <button id="clear" title="Clear canvas" aria-label="Clear canvas"><svg class="ic" aria-hidden="true"><use href="#i-clear"/></svg></button>
   </div>
-  <textarea id="note" placeholder="A few words, if you want (optional)"></textarea>
-  <div id="status"><i></i><span>Claude isn't listening</span></div>
-  <button id="send" title="Send to Claude (Ctrl+Enter)">Send to Claude</button>
+  <div class="group" role="group" aria-label="Layers">
+    <button id="layersBtn" aria-pressed="false" title="Layers (L)" aria-label="Layers"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></button>
+  </div>
 </div>
-<div id="toast"></div>
+</div>
+<aside id="side" aria-label="Chat with the agent">
+  <div id="sideGrip" role="separator" aria-orientation="vertical" aria-label="Resize chat panel" title="Drag to resize · double-click to reset" tabindex="0"></div>
+  <header><button id="sideToggle" class="hbtn" aria-expanded="true" title="Collapse chat (C)" aria-label="Collapse chat panel"><svg class="ic sm" aria-hidden="true"><use href="#i-collapse"/></svg></button><svg class="ic" aria-hidden="true"><use href="#i-agent"/></svg><b>Agent</b>
+  <button id="clearChat" class="hbtn" title="Clear chat history and saved sketches" aria-label="Clear chat history"><svg class="ic sm" aria-hidden="true"><use href="#i-clear"/></svg></button>
+  <div id="status" role="status" title="Agent is busy · sends are kept"><svg class="ic on-icon" aria-hidden="true"><use href="#i-listening"/></svg><svg class="ic off-icon" aria-hidden="true"><use href="#i-busy"/></svg><span class="sr">Agent is busy · sends are kept</span></div>
+  </header>
+  <div id="chat" role="log" aria-live="polite"></div>
+  <div id="answers"><button class="yes chunky" data-answer="yes">Yes</button><button class="chunky" data-answer="no">Not quite</button></div>
+  <div id="composer">
+    <textarea id="note" placeholder="A few words, if you want (optional) · Ctrl+Enter" aria-label="Note for the agent (optional)"></textarea>
+    <button id="send" class="chunky" title="Send to the agent (Ctrl+Enter)" aria-label="Send"><svg class="ic" aria-hidden="true"><use href="#i-send"/></svg></button>
+  </div>
+</aside>
+</div>
+<dialog id="viewer" aria-label="Sent sketch"><form method="dialog"><button aria-label="Close"><img id="viewerImg" alt="Sent sketch"></button></form></dialog>
+<dialog id="confirmBox">
+  <h2>doodle-prompt</h2>
+  <p id="confirmText"></p>
+  <form method="dialog"><button class="chunky" value="cancel">Cancel</button><button class="chunky" value="ok">Clear</button></form>
+</dialog>
+
 
 <script>
-const CLAUDE_COLOR = '#c96442';
+const CLAUDE_COLOR = '#6c4cf5';  // the agent's ink, so its marks stand apart from yours
 const paper = document.getElementById('paper');
 const ctx = paper.getContext('2d');
 const $ = (id) => document.getElementById(id);
@@ -106,15 +382,31 @@ let state = { version: 0, items: [], say: null, waiting: false };
 let scale = 1;
 let tool = 'pen';
 let color = '#1f2328';
-let drawing = null;          // stroke in progress
+let lineWidth = 3;
+let drawing = null;          // stroke or shape in progress
+const hiddenLayers = new Set();  // layer ids hidden on this screen
+let activeLayer = null;          // layer new strokes go on; the top layer until the user picks one
 let pending = [];            // strokes posted but not yet echoed back: {item, version}
 let erasing = null;          // Set of ids hidden locally during an eraser drag
 
 // ---------------------------------------------------------------- layout
 
+// Zoom multiplies the fit-to-window scale; 1 means the whole page fits.
+let zoom = 1;
+// Measured on the box around the scrolling stage: the stage's own size shrinks when scrollbars
+// appear, which would change the fit, drop the scrollbars, and flicker between two zoom levels.
+const fitScale = () => {
+  const box = $('stageBox');
+  return Math.min((box.clientWidth - 32) / canvasSize.width, (box.clientHeight - 32) / canvasSize.height);
+};
+// Keep the bitmap under 16k px a side so big pages at high zoom don't blow past canvas limits.
+const maxScale = () => 16384 / (Math.max(canvasSize.width, canvasSize.height) * (window.devicePixelRatio || 1));
+
 function fit() {
-  const stage = $('stage').getBoundingClientRect();
-  scale = Math.min((stage.width - 32) / canvasSize.width, (stage.height - 32) / canvasSize.height);
+  const box = $('stageBox');
+  if (!box.clientWidth || !box.clientHeight) return;
+  scale = Math.max(0.05, Math.min(maxScale(), fitScale() * zoom));
+  $('zoomLabel').textContent = `${Math.round(scale * 100)}%`;
   const dpr = window.devicePixelRatio || 1;
   paper.style.width = `${canvasSize.width * scale}px`;
   paper.style.height = `${canvasSize.height * scale}px`;
@@ -122,7 +414,8 @@ function fit() {
   paper.height = Math.round(canvasSize.height * scale * dpr);
   render();
 }
-window.addEventListener('resize', fit);
+// The stage also resizes when the bar wraps onto another row, not only with the window.
+new ResizeObserver(fit).observe($('stageBox'));
 
 // ---------------------------------------------------------------- drawing
 
@@ -194,6 +487,7 @@ function drawItem(c, it) {
   c.setLineDash(it.dashed ? [10, 8] : []);
   switch (it.type) {
     case 'stroke':
+      if (it.fill) { c.beginPath(); smoothPath(c, it.points); c.closePath(); c.fillStyle = it.fill; c.fill(); }
       c.beginPath(); smoothPath(c, it.points); c.stroke(); break;
     case 'line':
     case 'arrow': {
@@ -270,21 +564,74 @@ function drawItem(c, it) {
       String(it.text || '').split('\n').forEach((ln, i) => c.fillText(ln, it.x, it.y + i * size * 1.25));
       break;
     }
+    case 'image': {
+      const img = imageFor(it.src);
+      if (img.complete && img.naturalWidth) {
+        // Flips and quarter turns from the selection tools, applied around the image's center.
+        const turned = (it.rot || 0) % 180 !== 0;
+        c.translate(it.x + it.w / 2, it.y + it.h / 2);
+        c.scale(it.flipX ? -1 : 1, it.flipY ? -1 : 1);
+        c.rotate(((it.rot || 0) * Math.PI) / 180);
+        const iw = turned ? it.h : it.w, ih = turned ? it.w : it.h;
+        c.drawImage(img, -iw / 2, -ih / 2, iw, ih);
+      }
+      else { c.setLineDash([6, 6]); c.strokeStyle = '#8b8b86'; c.strokeRect(it.x, it.y, it.w, it.h); }
+      break;
+    }
   }
   c.restore();
 }
 
-function visibleItems() {
-  const hidden = erasing || new Set();
-  return [...state.items.filter((it) => !hidden.has(it.id)), ...pending.map((p) => p.item)];
+// Items in layer order (bottom first). Hidden layers only affect the screen: the agent always sees every item.
+// Decoded images by src, so pasted pictures aren't decoded on every frame.
+const images = new Map();
+function imageFor(src) {
+  let img = images.get(src);
+  if (!img) {
+    img = new Image();
+    img.onload = () => { render(); scheduleSnapshot(); };
+    img.src = src;
+    images.set(src, img);
+  }
+  return img;
 }
 
-function paint(c, k) {
+function visibleItems(all = false) {
+  const hidden = erasing || new Set();
+  const order = new Map((state.layers || []).map((l, i) => [l.id, i]));
+  const items = state.items
+    .filter((it) => !hidden.has(it.id) && (all || !hiddenLayers.has(it.layer)))
+    .map((it) => preview.get(it.id) || it)
+    .map((it, i) => [order.get(it.layer) ?? 0, i, it])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    .map(([, , it]) => it);
+  return [...items, ...pending.map((p) => p.item)];
+}
+
+let dots = null;
+function dotPattern(c) {
+  if (!dots) {
+    const tile = document.createElement('canvas');
+    tile.width = tile.height = 24;
+    const g = tile.getContext('2d');
+    g.fillStyle = 'rgba(20,20,20,.10)';
+    g.beginPath(); g.arc(12, 12, 1.2, 0, Math.PI * 2); g.fill();
+    dots = tile;
+  }
+  return c.createPattern(dots, 'repeat');
+}
+
+function paint(c, k, forSnapshot = false) {
   c.setTransform(k, 0, 0, k, 0, 0);
   c.fillStyle = '#ffffff';
   c.fillRect(0, 0, canvasSize.width, canvasSize.height);
-  for (const it of visibleItems()) drawItem(c, it);
+  // Faint dot grid like a sketchbook page; on screen only, never in what the agent sees.
+  if (!forSnapshot) { c.fillStyle = dotPattern(c); c.fillRect(0, 0, canvasSize.width, canvasSize.height); }
+  const items = visibleItems(forSnapshot);
+  for (const it of items) drawItem(c, it);
+  if (forSnapshot) return;
   if (drawing) drawItem(c, drawing);
+  paintSelection(c);
 }
 
 function render() { paint(ctx, scale * (window.devicePixelRatio || 1)); }
@@ -292,9 +639,7 @@ function render() { paint(ctx, scale * (window.devicePixelRatio || 1)); }
 function snapshot() {
   const off = document.createElement('canvas');
   off.width = canvasSize.width; off.height = canvasSize.height;
-  const saved = drawing; drawing = null;
-  paint(off.getContext('2d'), 1);
-  drawing = saved;
+  paint(off.getContext('2d'), 1, true);
   return off.toDataURL('image/png');
 }
 
@@ -317,14 +662,21 @@ function applyState(next) {
   const changed = next.version !== state.version;
   state = next;
   if (next.canvas && (next.canvas.width !== canvasSize.width || next.canvas.height !== canvasSize.height)) {
-    canvasSize = next.canvas; fit();
+    canvasSize = next.canvas; fit(); showSize();
   }
   pending = pending.filter((p) => p.version === null || p.version > state.version);
-  $('bubble').style.display = state.say ? 'block' : 'none';
-  $('bubbleText').textContent = state.say || '';
+  if ([...selection].some((id) => !state.items.some((it) => it.id === id))) selection = new Set([...selection].filter((id) => state.items.some((it) => it.id === id)));
+  renderChat();
   $('answers').classList.toggle('show', Boolean(state.ask));
+  $('sideToggle').classList.toggle('has-ask', Boolean(state.ask));
   $('status').classList.toggle('on', state.waiting);
-  $('status').querySelector('span').textContent = state.waiting ? 'Claude is listening' : "Claude isn't listening";
+  const layers = state.layers || [];
+  if (!layers.some((l) => l.id === activeLayer)) activeLayer = layers.length ? layers[layers.length - 1].id : null;
+  renderLayers();
+  $('hint').classList.toggle('show', !state.items.length && !pending.length);
+  const status = state.waiting ? 'Agent is listening' : 'Agent is busy · sends are kept';
+  $('status').title = status;
+  $('status').querySelector('span').textContent = status;
   render();
   if (changed) scheduleSnapshot();
 }
@@ -336,11 +688,353 @@ async function addItems(items) {
   const entries = items.map((item) => ({ item, version: null }));
   pending.push(...entries);
   render();
-  const r = await post('/api/ops', { author: 'user', add: items });
+  const r = await post('/api/ops', { author: 'user', add: items.map((it) => ({ ...it, layer: activeLayer })) });
   entries.forEach((e) => { e.version = r.version; });
   pending = pending.filter((p) => p.version === null || p.version > state.version);
   render();
+  return r;
 }
+
+// ---------------------------------------------------------------- selection (Paint-style)
+// Drag a rectangle (or a free-form loop with the lasso) to select. Whatever lies inside moves,
+// copies, flips, rotates, scales or gets deleted together. Images and freehand strokes that the
+// region only partly covers are cut along it, like pixels in Paint.
+
+let selection = new Set();   // selected item ids
+let preview = new Map();     // id -> item drawn in place of the stored one while dragging
+let drag = null;             // select/lasso drag in progress
+const GEOMETRY = ['points', 'x', 'y', 'w', 'h', 'size', 'flipX', 'flipY', 'rot'];
+const HANDLE = 9;            // handle size in screen px
+
+const selectedItems = () => state.items.filter((it) => selection.has(it.id)).map((it) => preview.get(it.id) || it);
+
+function unionBox(items) {
+  if (!items.length) return null;
+  const boxes = items.map(itemBox);
+  return [Math.min(...boxes.map((b) => b[0])), Math.min(...boxes.map((b) => b[1])),
+    Math.max(...boxes.map((b) => b[2])), Math.max(...boxes.map((b) => b[3]))];
+}
+
+function setSelection(ids) {
+  selection = new Set(ids);
+  render();
+}
+
+const round1 = (v) => Math.round(v * 10) / 10;
+
+// Map an item through a point transform f. Flips and quarter turns also update an image's
+// orientation; k scales text size.
+function transformItem(it, f, { flipX = false, flipY = false, rot = 0, k = 1 } = {}) {
+  const out = { ...it };
+  if (it.points) out.points = it.points.map((p) => f(p).map(round1));
+  else if (it.type === 'text') {
+    const [x1, y1, x2, y2] = itemBox(it);
+    const c = f([(x1 + x2) / 2, (y1 + y2) / 2]);
+    const size = Math.max(6, Math.round((it.size || 24) * k));
+    out.size = size;
+    out.x = round1(c[0] - ((x2 - x1) * k) / 2);
+    out.y = round1(c[1] - ((y2 - y1) * k) / 2 + size);
+  } else {
+    const a = f([it.x, it.y]), b = f([it.x + it.w, it.y + it.h]);
+    out.x = round1(Math.min(a[0], b[0])); out.y = round1(Math.min(a[1], b[1]));
+    out.w = round1(Math.abs(b[0] - a[0])); out.h = round1(Math.abs(b[1] - a[1]));
+  }
+  if (it.type === 'image') {
+    // Flips are applied on screen after the rotation, so a quarter turn swaps which axis is flipped.
+    if (rot) { const fx = out.flipX; out.flipX = out.flipY; out.flipY = fx; out.rot = ((it.rot || 0) + rot) % 360; }
+    if (flipX) out.flipX = !out.flipX;
+    if (flipY) out.flipY = !out.flipY;
+  }
+  return out;
+}
+
+const patchOf = (it) => Object.fromEntries([['id', it.id], ...GEOMETRY.filter((k) => k in it).map((k) => [k, it[k]])]);
+
+// Store transformed items: show them right away, then send one update (one undo step).
+async function commitItems(items, extra = {}) {
+  if (!items.length) return;
+  for (const it of items) {
+    const i = state.items.findIndex((x) => x.id === it.id);
+    if (i >= 0) state.items[i] = it;
+  }
+  preview.clear();
+  render();
+  await post('/api/ops', { author: 'user', update: items.map(patchOf), ...extra });
+}
+
+function transformSelection(makeF, opts) {
+  const items = selectedItems();
+  const box = unionBox(items);
+  if (!box) return;
+  const f = makeF(box);
+  commitItems(items.map((it) => transformItem(it, f, opts)));
+}
+const flipSelectionH = () => transformSelection(([x1, , x2]) => ([x, y]) => [x1 + x2 - x, y], { flipX: true });
+const flipSelectionV = () => transformSelection(([, y1, , y2]) => ([x, y]) => [x, y1 + y2 - y], { flipY: true });
+const rotateSelection = () => transformSelection(([x1, y1, x2, y2]) => {
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  return ([x, y]) => [cx - (y - cy), cy + (x - cx)];
+}, { rot: 90 });
+
+function nudgeSelection(dx, dy) {
+  commitItems(selectedItems().map((it) => translated(it, dx, dy)));
+}
+
+async function deleteSelection() {
+  const ids = [...selection];
+  if (!ids.length) return;
+  setSelection([]);
+  await post('/api/ops', { author: 'user', remove: ids });
+}
+
+const shapeOf = ({ id, author, ...shape }) => shape;
+
+// Add shapes on their own layers (or the active one) and select what was added.
+async function addAndSelect(shapes) {
+  if (!shapes.length) return;
+  const r = await post('/api/ops', { author: 'user', add: shapes.map((s) => ({ ...s, layer: s.layer || activeLayer })) });
+  if (r.ids) { setTool('select'); setSelection(r.ids); }
+}
+
+const duplicateSelection = () => addAndSelect(selectedItems().map((it) => translated(shapeOf(it), 20, 20)));
+
+function selectAll() {
+  setTool('select');
+  setSelection(pickable().map((it) => it.id));
+}
+
+// ---- region selection
+
+function regionPath(c, region) {
+  c.beginPath();
+  if (region.rect) { const [x1, y1, x2, y2] = region.rect; c.rect(x1, y1, x2 - x1, y2 - y1); }
+  else region.poly.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
+  c.closePath();
+}
+
+function insidePolygon(p, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function inRegion(p, region) {
+  if (region.rect) { const [x1, y1, x2, y2] = region.rect; return p[0] >= x1 && p[0] <= x2 && p[1] >= y1 && p[1] <= y2; }
+  return insidePolygon(p, region.poly);
+}
+
+const corners = ([x1, y1, x2, y2]) => [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
+const boxesOverlap = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+
+// An image cut along the region: the part inside (cropped to it) and the rest, as new images.
+function cutImage(it, region, rbox) {
+  const [x1, y1, x2, y2] = itemBox(it);
+  const k = Math.min(2, 4096 / Math.max(1, x2 - x1, y2 - y1));
+  const piece = (inside, bx1, by1, bx2, by2) => {
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round((bx2 - bx1) * k)); cv.height = Math.max(1, Math.round((by2 - by1) * k));
+    const g = cv.getContext('2d');
+    g.setTransform(k, 0, 0, k, -bx1 * k, -by1 * k);
+    if (inside) { regionPath(g, region); g.clip(); drawItem(g, it); }
+    else { drawItem(g, it); g.globalCompositeOperation = 'destination-out'; regionPath(g, region); g.fill(); }
+    const { id, author, flipX, flipY, rot, ...rest } = it;
+    return { ...rest, src: cv.toDataURL('image/png'), x: bx1, y: by1, w: bx2 - bx1, h: by2 - by1 };
+  };
+  const ix1 = Math.max(x1, rbox[0]), iy1 = Math.max(y1, rbox[1]), ix2 = Math.min(x2, rbox[2]), iy2 = Math.min(y2, rbox[3]);
+  return { inside: piece(true, ix1, iy1, ix2, iy2), outside: piece(false, x1, y1, x2, y2) };
+}
+
+// A freehand stroke split into the runs of points inside and outside the region.
+function cutStroke(it, region) {
+  const runs = [];
+  let cur = null, prev = null;
+  for (const p of it.points) {
+    const inside = inRegion(p, region);
+    if (!cur || cur.inside !== inside) {
+      // Split exactly where the stroke crosses the region's edge.
+      let edge = null;
+      if (prev) {
+        let a = prev, b = p;
+        for (let i = 0; i < 12; i++) {
+          const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+          if (inRegion(m, region) === inside) b = m; else a = m;
+        }
+        edge = b.map(round1);
+        cur.points.push(edge);
+      }
+      cur = { inside, points: edge ? [edge] : [] };
+      runs.push(cur);
+    }
+    cur.points.push(p);
+    prev = p;
+  }
+  const { id, author, fill, ...rest } = it;
+  const shapes = (inside) => runs.filter((r) => r.inside === inside && r.points.length > 1).map((r) => ({ ...rest, points: r.points }));
+  return { inside: shapes(true), outside: shapes(false) };
+}
+
+async function selectRegion(region, add) {
+  const rbox = region.rect || [
+    Math.min(...region.poly.map((p) => p[0])), Math.min(...region.poly.map((p) => p[1])),
+    Math.max(...region.poly.map((p) => p[0])), Math.max(...region.poly.map((p) => p[1])),
+  ];
+  const whole = [], remove = [], insideShapes = [], outsideShapes = [];
+  const lift = [];  // what the selection holds, bottom to top: ids, or indexes into insideShapes
+  for (const it of pickable()) {
+    const box = itemBox(it);
+    if (!boxesOverlap(box, rbox) && !(box[0] === box[2] || box[1] === box[3])) continue;
+    const pts = it.points && it.type !== 'polygon' ? it.points : corners(box);
+    const inside = pts.filter((p) => inRegion(p, region)).length;
+    if (inside === pts.length) { whole.push(it.id); lift.push(it.id); continue; }
+    // What's left outside takes the original's place in the stacking order; the cut-out part
+    // floats on top, like a fresh selection in Paint.
+    if (it.type === 'image' && boxesOverlap(box, rbox)) {
+      const cut = cutImage(it, region, rbox);
+      outsideShapes.push({ ...cut.outside, replaces: it.id });
+      lift.push(insideShapes.length); insideShapes.push(cut.inside);
+    } else if (it.type === 'stroke' && inside > 0) {
+      const cut = cutStroke(it, region);
+      if (cut.outside.length) outsideShapes.push({ ...cut.outside[0], replaces: it.id }, ...cut.outside.slice(1));
+      else remove.push(it.id);
+      for (const piece of cut.inside) { lift.push(insideShapes.length); insideShapes.push(piece); }
+    }
+  }
+  let ids = whole;
+  if (insideShapes.length) {
+    // Everything selected moves to the top together, keeping its own order, so a cut-out picture
+    // doesn't cover the shapes that were drawn over it.
+    const raise = lift.map((ref) => (typeof ref === 'number' ? `#${outsideShapes.length + ref}` : ref));
+    const r = await post('/api/ops', { author: 'user', remove, add: [...outsideShapes, ...insideShapes], raise });
+    ids = [...whole, ...(r.ids || []).slice(outsideShapes.length)];
+  }
+  setSelection(add ? [...selection, ...ids] : ids);
+}
+
+// ---- pointer handling for the select and lasso tools
+
+function handleAt(p) {
+  const box = unionBox(selectedItems());
+  if (!box) return null;
+  const r = HANDLE / scale;
+  return corners(box).findIndex(([x, y]) => Math.abs(p[0] - x) <= r && Math.abs(p[1] - y) <= r);
+}
+
+function selectDown(p, e) {
+  const box = unionBox(selectedItems());
+  const h = handleAt(p);
+  if (h !== null && h >= 0) {
+    // Scale from the opposite corner.
+    const anchor = corners(box)[(h + 2) % 4];
+    drag = { kind: 'scale', anchor, from: corners(box)[h], items: selectedItems() };
+    return;
+  }
+  const inBox = box && p[0] >= box[0] && p[0] <= box[2] && p[1] >= box[1] && p[1] <= box[3];
+  if (inBox && !e.shiftKey) { drag = { kind: 'move', from: p, items: selectedItems() }; paper.classList.add('moving'); return; }
+  if (tool === 'select') {
+    const hit = [...pickable()].reverse().find((it) => hits(it, p));
+    if (hit) {
+      if (e.shiftKey) {
+        const next = new Set(selection);
+        next.has(hit.id) ? next.delete(hit.id) : next.add(hit.id);
+        setSelection([...next]);
+        return;
+      }
+      setSelection([hit.id]);
+      drag = { kind: 'move', from: p, items: [hit] };
+      paper.classList.add('moving');
+      return;
+    }
+  }
+  if (!e.shiftKey) setSelection([]);
+  drag = { kind: tool === 'lasso' ? 'lasso' : 'marquee', from: p, to: p, points: [p], add: e.shiftKey };
+}
+
+function selectMove(p, e) {
+  if (drag.kind === 'move') {
+    const dx = p[0] - drag.from[0], dy = p[1] - drag.from[1];
+    preview = new Map(drag.items.map((it) => [it.id, translated(it, dx, dy)]));
+  } else if (drag.kind === 'scale') {
+    const [ax, ay] = drag.anchor;
+    let sx = (p[0] - ax) / (drag.from[0] - ax || 1), sy = (p[1] - ay) / (drag.from[1] - ay || 1);
+    if (e.shiftKey) { const s = Math.max(Math.abs(sx), Math.abs(sy)); sx = Math.sign(sx) * s; sy = Math.sign(sy) * s; }
+    const f = ([x, y]) => [ax + (x - ax) * sx, ay + (y - ay) * sy];
+    const k = Math.sqrt(Math.abs(sx * sy));
+    preview = new Map(drag.items.map((it) => [it.id, transformItem(it, f, { flipX: sx < 0, flipY: sy < 0, k })]));
+  } else {
+    drag.to = p;
+    if (drag.kind === 'lasso') {
+      const last = drag.points[drag.points.length - 1];
+      if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= 2) drag.points.push(p);
+    }
+  }
+  render();
+}
+
+async function selectUp() {
+  const d = drag;
+  drag = null;
+  paper.classList.remove('moving');
+  if (d.kind === 'move' || d.kind === 'scale') {
+    const moved = d.items.map((it) => preview.get(it.id)).filter(Boolean);
+    if (moved.length) await commitItems(moved); else { preview.clear(); render(); }
+    return;
+  }
+  if (d.kind === 'marquee') {
+    const rect = [Math.min(d.from[0], d.to[0]), Math.min(d.from[1], d.to[1]), Math.max(d.from[0], d.to[0]), Math.max(d.from[1], d.to[1])];
+    if (rect[2] - rect[0] < 3 && rect[3] - rect[1] < 3) { render(); return; }  // a click on empty space
+    await selectRegion({ rect }, d.add);
+  } else if (d.points.length > 2) await selectRegion({ poly: d.points }, d.add);
+  render();
+}
+
+// The marquee or lasso being dragged, and the selection's box with corner handles.
+function paintSelection(c) {
+  c.save();
+  c.lineWidth = 1.5 / scale;
+  c.setLineDash([6 / scale, 4 / scale]);
+  c.strokeStyle = '#2f6fde';
+  if (drag && drag.kind === 'marquee') {
+    const [a, b] = [drag.from, drag.to];
+    c.fillStyle = 'rgba(47,111,222,.08)';
+    c.fillRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+    c.strokeRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+  }
+  if (drag && drag.kind === 'lasso') {
+    c.beginPath(); drag.points.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke();
+  }
+  const box = unionBox(selectedItems());
+  if (box) {
+    const [x1, y1, x2, y2] = box;
+    c.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    c.setLineDash([]);
+    const r = HANDLE / scale / 2;
+    for (const [x, y] of corners(box)) {
+      c.fillStyle = '#ffffff'; c.fillRect(x - r, y - r, r * 2, r * 2);
+      c.strokeRect(x - r, y - r, r * 2, r * 2);
+    }
+  }
+  c.restore();
+  placeSelBar(box);
+}
+
+// Floating actions above the selection.
+function placeSelBar(box) {
+  const bar = $('selbar');
+  if (!box || drag) { bar.classList.remove('show'); return; }
+  bar.classList.add('show');
+  const top = box[1] * scale + 16 - bar.offsetHeight - 10;
+  bar.style.left = `${Math.max(0, box[0] * scale + 16)}px`;
+  bar.style.top = `${top < 0 ? box[3] * scale + 16 + 10 : top}px`;
+}
+
+$('selFlipH').addEventListener('click', flipSelectionH);
+$('selFlipV').addEventListener('click', flipSelectionV);
+$('selRotate').addEventListener('click', rotateSelection);
+$('selDup').addEventListener('click', duplicateSelection);
+$('selDel').addEventListener('click', deleteSelection);
 
 // ---------------------------------------------------------------- input
 
@@ -355,47 +1049,86 @@ function distToSegment(p, a, b) {
   return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
 }
 
-function hits(it, p) {
-  const R = 10;
-  if (it.type === 'polygon') {
-    const xs = it.points.map((q) => q[0]), ys = it.points.map((q) => q[1]);
-    return p[0] >= Math.min(...xs) - R && p[0] <= Math.max(...xs) + R && p[1] >= Math.min(...ys) - R && p[1] <= Math.max(...ys) + R;
-  }
+// [x1, y1, x2, y2] in logical pixels.
+function itemBox(it) {
   if (it.points) {
-    if (it.points.length === 1) return Math.hypot(p[0] - it.points[0][0], p[1] - it.points[0][1]) < R;
-    for (let i = 0; i < it.points.length - 1; i++) if (distToSegment(p, it.points[i], it.points[i + 1]) < R) return true;
-    return false;
+    const xs = it.points.map((q) => q[0]), ys = it.points.map((q) => q[1]);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
   }
   if (it.type === 'text') {
     const size = it.size || 24;
     ctx.font = `${size}px ui-sans-serif, system-ui, sans-serif`;
     const w = Math.max(...String(it.text).split('\n').map((l) => ctx.measureText(l).width));
     const lines = String(it.text).split('\n').length;
-    return p[0] >= it.x - R && p[0] <= it.x + w + R && p[1] >= it.y - size - R && p[1] <= it.y + (lines - 1) * size * 1.25 + R;
+    return [it.x, it.y - size, it.x + w, it.y + (lines - 1) * size * 1.25];
   }
-  const x1 = Math.min(it.x, it.x + it.w), x2 = Math.max(it.x, it.x + it.w);
-  const y1 = Math.min(it.y, it.y + it.h), y2 = Math.max(it.y, it.y + it.h);
+  return [Math.min(it.x, it.x + it.w), Math.min(it.y, it.y + it.h), Math.max(it.x, it.x + it.w), Math.max(it.y, it.y + it.h)];
+}
+
+function hits(it, p) {
+  const R = 10;
+  if (it.points && it.type !== 'polygon') {
+    if (it.points.length === 1) return Math.hypot(p[0] - it.points[0][0], p[1] - it.points[0][1]) < R;
+    for (let i = 0; i < it.points.length - 1; i++) if (distToSegment(p, it.points[i], it.points[i + 1]) < R) return true;
+    return false;
+  }
+  const [x1, y1, x2, y2] = itemBox(it);
   return p[0] >= x1 - R && p[0] <= x2 + R && p[1] >= y1 - R && p[1] <= y2 + R;
 }
 
+// Only what's on screen can be erased or picked, so hidden layers stay untouched.
+const pickable = () => visibleItems().filter((it) => state.items.some((x) => x.id === it.id));
+
 function eraseAt(p) {
-  for (const it of state.items) if (!erasing.has(it.id) && hits(it, p)) erasing.add(it.id);
+  for (const it of pickable()) if (!erasing.has(it.id) && hits(it, p)) erasing.add(it.id);
   render();
 }
 
+function translated(it, dx, dy) {
+  if (it.points) return { ...it, points: it.points.map(([x, y]) => [Math.round((x + dx) * 10) / 10, Math.round((y + dy) * 10) / 10]) };
+  return { ...it, x: Math.round(it.x + dx), y: Math.round(it.y + dy) };
+}
+
+// A rect/ellipse from two corners, or an arrow from start to end.
+function shapeFrom(type, a, b) {
+  if (type === 'arrow') return { type, points: [a, b] };
+  return { type, x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]) };
+}
+const SHAPE_TOOLS = new Set(['rect', 'ellipse', 'arrow']);
+
 paper.addEventListener('pointerdown', (e) => {
+  if (e.button === 1 || (e.button === 0 && spaceDown)) { e.preventDefault(); startPan(e); return; }
   if (e.button !== 0) return;
+  $('hint').classList.remove('show');
   const p = toLogical(e);
+  if (textAt) { commitText(); e.preventDefault(); return; }
   if (tool === 'text') { openTextInput(p); e.preventDefault(); return; }
+  if (tool === 'fill') { fillAt(p); return; }
   paper.setPointerCapture(e.pointerId);
   if (tool === 'eraser') { erasing = new Set(); eraseAt(p); return; }
-  drawing = { type: 'stroke', points: [p], color, author: 'user', id: 'live' };
+  if (tool === 'select' || tool === 'lasso') { selectDown(p, e); render(); return; }
+  if (SHAPE_TOOLS.has(tool)) {
+    drawing = { ...shapeFrom(tool, p, p), start: p, color, width: lineWidth, author: 'user', id: 'live' };
+  }
+  else drawing = { type: 'stroke', points: [p], color, width: lineWidth, author: 'user', id: 'live' };
   render();
 });
 
 paper.addEventListener('pointermove', (e) => {
+  if (panning) {
+    const st = $('stage');
+    st.scrollLeft = panning.left - (e.clientX - panning.x);
+    st.scrollTop = panning.top - (e.clientY - panning.y);
+    return;
+  }
   if (tool === 'eraser' && erasing) { eraseAt(toLogical(e)); return; }
+  if (drag) { selectMove(toLogical(e), e); return; }
   if (!drawing) return;
+  if (drawing.start) {
+    drawing = { ...drawing, ...shapeFrom(drawing.type, drawing.start, toLogical(e)) };
+    render();
+    return;
+  }
   const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
   for (const ev of events) {
     const p = toLogical(ev), last = drawing.points[drawing.points.length - 1];
@@ -405,6 +1138,7 @@ paper.addEventListener('pointermove', (e) => {
 });
 
 async function endPointer() {
+  if (panning) { panning = null; $('stage').classList.remove('panning'); return; }
   if (erasing) {
     const ids = [...erasing];
     if (ids.length) await post('/api/ops', { author: 'user', remove: ids });
@@ -412,53 +1146,420 @@ async function endPointer() {
     render();
     return;
   }
+  if (drag) { await selectUp(); return; }
   if (!drawing) return;
-  const { points, color: c } = drawing;
+  const { author: _a, id: _i, start, ...shape } = drawing;
   drawing = null;
-  await addItems([{ type: 'stroke', points, color: c }]);
+  if (start) {
+    const [x1, y1, x2, y2] = itemBox(shape);
+    if (Math.max(x2 - x1, y2 - y1) < 4) { render(); return; }  // a click, not a drag
+  }
+  await addItems([shape]);
 }
 paper.addEventListener('pointerup', endPointer);
 paper.addEventListener('pointercancel', endPointer);
 
 const textInput = $('textInput');
 let textAt = null;
+// With the text tool the width slider sets the text size.
+const textSize = () => 14 + lineWidth * 3;
+let textSizeAt = 24;
+
+function growTextInput() {
+  textInput.style.width = '0px'; textInput.style.height = '0px';
+  textInput.style.width = `${Math.max(120, textInput.scrollWidth + 8)}px`;
+  textInput.style.height = `${textInput.scrollHeight}px`;
+}
+
 function openTextInput(p) {
   textAt = p;
+  textSizeAt = textSize();
   textInput.value = '';
   textInput.style.left = `${p[0] * scale}px`;
-  textInput.style.top = `${p[1] * scale - 24 * scale}px`;
-  textInput.style.fontSize = `${24 * scale}px`;
+  textInput.style.top = `${(p[1] - textSizeAt) * scale}px`;
+  textInput.style.fontSize = `${textSizeAt * scale}px`;
   textInput.style.color = color;
   textInput.style.display = 'block';
+  growTextInput();
   setTimeout(() => textInput.focus(), 0);
 }
 function commitText() {
-  const text = textInput.value.trim();
+  if (!textAt) return;
+  const text = textInput.value.replace(/\s+$/, '');
   textInput.style.display = 'none';
-  if (text && textAt) addItems([{ type: 'text', x: textAt[0], y: textAt[1], text, color, size: 24 }]);
+  if (text.trim()) addItems([{ type: 'text', x: textAt[0], y: textAt[1], text, color, size: textSizeAt }]);
   textAt = null;
 }
+textInput.addEventListener('input', growTextInput);
 textInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); commitText(); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); commitText(); }
   if (e.key === 'Escape') { textAt = null; textInput.style.display = 'none'; }
 });
-textInput.addEventListener('blur', commitText);
+// Clicking anywhere else places the text, except the size slider, which resizes it in place.
+textInput.addEventListener('blur', (e) => { if (e.relatedTarget !== $('width')) commitText(); });
+$('width').addEventListener('change', () => { if (textAt) textInput.focus(); });
 
 function setTool(t) {
   tool = t;
   document.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
-  paper.className = t === 'pen' ? '' : t;
+  paper.className = t === 'pen' || SHAPE_TOOLS.has(t) ? '' : t;
+  showWidth();
+  if (t !== 'select' && t !== 'lasso' && selection.size) setSelection([]);
 }
 document.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
-document.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('click', () => {
-  color = b.dataset.color;
-  document.querySelectorAll('[data-color]').forEach((s) => s.setAttribute('aria-pressed', String(s === b)));
-  if (tool === 'eraser') setTool('pen');
-}));
+
+function setColor(c, button) {
+  color = c;
+  showWidth();
+  document.querySelectorAll('[data-color]').forEach((s) => s.setAttribute('aria-pressed', String(s === button)));
+  if (tool === 'eraser' || tool === 'select') setTool('pen');
+}
+document.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('click', () => setColor(b.dataset.color, b)));
+$('customColor').addEventListener('input', (e) => setColor(e.target.value, null));
+
+function showWidth() {
+  const d = Math.max(2, Math.min(22, lineWidth));
+  const dot = $('widthDot').firstElementChild;
+  dot.style.width = dot.style.height = `${d}px`;
+  dot.style.background = color;
+  $('width').title = tool === 'text' ? `Text size: ${textSize()}` : `Line width: ${lineWidth}`;
+}
+$('width').addEventListener('input', (e) => {
+  lineWidth = Number(e.target.value);
+  showWidth();
+  if (tool === 'eraser' || tool === 'select') setTool('pen');
+  // Resize a text box that's still being typed.
+  if (textAt) {
+    textSizeAt = textSize();
+    textInput.style.fontSize = `${textSizeAt * scale}px`;
+    textInput.style.top = `${(textAt[1] - textSizeAt) * scale}px`;
+    growTextInput();
+  }
+});
+showWidth();
+
+// ---------------------------------------------------------------- chat
+
+let chatShown = '';  // signature of what's on screen, so the list only redraws when it changes
+let chatSeen = new Set();  // message times already shown, so only new ones animate in
+function renderChat() {
+  const chat = state.chat || [];
+  const sig = chat.map((m) => `${m.at}${m.img ? 'i' : ''}`).join(',');
+  if (sig === chatShown) return;
+  chatShown = sig;
+  const box = $('chat');
+  box.textContent = '';
+  if (!chat.length) {
+    box.innerHTML = '<p class="chat-empty">Draw, add a note if you like, and send. The agent answers here and on the canvas.</p>';
+    return;
+  }
+  for (const m of chat) {
+    const el = document.createElement('div');
+    el.className = `msg ${m.from === 'agent' ? 'agent' : 'user'}` + (m.from !== 'agent' && !m.text ? ' sketch-only' : '') + (m.img ? ' has-img' : '')
+      + (chatSeen.size && !chatSeen.has(m.at) ? ' new' : '');
+    if (m.img) {
+      const img = document.createElement('img');
+      img.src = `/sends/${m.img}`; img.alt = 'Sent sketch'; img.loading = 'lazy';
+      img.addEventListener('click', () => { $('viewerImg').src = img.src; $('viewer').showModal(); });
+      el.appendChild(img);
+    }
+    if (m.text || !m.img) el.appendChild(document.createTextNode(m.text || 'Sent the sketch'));
+    const del = document.createElement('button');
+    del.className = 'mdel'; del.title = 'Delete'; del.setAttribute('aria-label', 'Delete message');
+    del.innerHTML = svgIcon('x');
+    del.addEventListener('click', () => post('/api/chat-delete', { at: m.at }));
+    el.appendChild(del);
+    box.appendChild(el);
+  }
+  chatSeen = new Set(chat.map((m) => m.at));
+  box.scrollTop = box.scrollHeight;
+}
+
+// Chat panel width and collapsed state are remembered per browser.
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+function setSideWidth(w) {
+  const max = Math.max(260, Math.round(window.innerWidth * 0.6));
+  const px = Math.max(240, Math.min(max, Math.round(w)));
+  document.documentElement.style.setProperty('--side-w', `${px}px`);
+  return px;
+}
+function setCollapsed(on) {
+  $('side').classList.toggle('collapsed', on);
+  $('sideToggle').setAttribute('aria-expanded', String(!on));
+  $('sideToggle').title = on ? 'Expand chat (C)' : 'Collapse chat (C)';
+  $('sideToggle').setAttribute('aria-label', on ? 'Expand chat panel' : 'Collapse chat panel');
+  store.set('doodle.sideCollapsed', on ? '1' : '0');
+  renderChat();
+}
+$('sideToggle').addEventListener('click', () => setCollapsed(!$('side').classList.contains('collapsed')));
+if (store.get('doodle.sideWidth')) setSideWidth(Number(store.get('doodle.sideWidth')));
+if (store.get('doodle.sideCollapsed') === '1') setCollapsed(true);
+
+$('sideGrip').addEventListener('pointerdown', (e) => {
+  const grip = $('sideGrip');
+  grip.setPointerCapture(e.pointerId);
+  grip.classList.add('dragging');
+  const right = $('side').getBoundingClientRect().right;
+  const move = (ev) => setSideWidth(right - ev.clientX);
+  const up = () => {
+    grip.classList.remove('dragging');
+    grip.removeEventListener('pointermove', move);
+    store.set('doodle.sideWidth', String($('side').getBoundingClientRect().width));
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', up, { once: true });
+});
+$('sideGrip').addEventListener('dblclick', () => { setSideWidth(310); store.set('doodle.sideWidth', '310'); });
+// Keyboard: arrow keys resize by 20px.
+$('sideGrip').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault();
+  const w = setSideWidth($('side').getBoundingClientRect().width + (e.key === 'ArrowLeft' ? 20 : -20));
+  store.set('doodle.sideWidth', String(w));
+});
+
+$('clearChat').addEventListener('click', () => {
+  if (!(state.chat || []).length) return;
+  askConfirm('Clear the chat history and the saved sketches? The canvas stays as it is.', 'Clear',
+    () => post('/api/chat-delete', { all: true }));
+});
+
+// ---------------------------------------------------------------- size & zoom
+
+function showSize() {
+  if (document.activeElement !== $('cw')) $('cw').value = canvasSize.width;
+  if (document.activeElement !== $('ch')) $('ch').value = canvasSize.height;
+}
+function applySize() {
+  const w = Number($('cw').value), h = Number($('ch').value);
+  if (!(w > 0 && h > 0) || (w === canvasSize.width && h === canvasSize.height)) return showSize();
+  post('/api/ops', { author: 'user', resize: { width: w, height: h } });
+}
+for (const id of ['cw', 'ch']) {
+  $(id).addEventListener('change', applySize);
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') { applySize(); e.target.blur(); } });
+}
+showSize();
+
+// Zoom around a point on screen (the cursor, or the middle of the stage) so it stays put.
+function setZoom(z, at) {
+  const st = $('stage');
+  const box = st.getBoundingClientRect();
+  const ax = at ? at.x : box.left + box.width / 2, ay = at ? at.y : box.top + box.height / 2;
+  const before = paper.getBoundingClientRect();
+  const lx = (ax - before.left) / scale, ly = (ay - before.top) / scale;
+  const f = fitScale();
+  zoom = Math.max(0.1 / f, Math.min(Math.min(8, maxScale()) / f, z));
+  fit();
+  const after = paper.getBoundingClientRect();
+  st.scrollLeft += after.left + lx * scale - ax;
+  st.scrollTop += after.top + ly * scale - ay;
+}
+$('zoomIn').addEventListener('click', () => setZoom(zoom * 1.25));
+$('zoomOut').addEventListener('click', () => setZoom(zoom / 1.25));
+$('zoomLabel').addEventListener('click', () => setZoom(1));
+$('stage').addEventListener('wheel', (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;  // plain wheel scrolls; Ctrl/⌘ or a pinch zooms
+  e.preventDefault();
+  setZoom(zoom * Math.exp(-e.deltaY * 0.0015), { x: e.clientX, y: e.clientY });
+}, { passive: false });
+
+// Pan by holding Space (or the middle button) and dragging.
+let spaceDown = false, panning = null;
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && !e.target.closest('input, textarea, button') && !spaceDown) {
+    spaceDown = true; $('stage').classList.add('space'); e.preventDefault();
+  }
+});
+document.addEventListener('keyup', (e) => { if (e.code === 'Space') { spaceDown = false; $('stage').classList.remove('space'); } });
+function startPan(e) {
+  const st = $('stage');
+  panning = { x: e.clientX, y: e.clientY, left: st.scrollLeft, top: st.scrollTop };
+  st.classList.add('panning');
+  paper.setPointerCapture(e.pointerId);
+}
+
+// ---------------------------------------------------------------- layers
+
+const svgIcon = (name, cls = 'ic sm') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+let renaming = null;  // id of the layer whose name is being edited
+
+function renderLayers() {
+  if (renaming) return;  // don't wipe the input while the user types
+  const list = $('layerList');
+  list.textContent = '';
+  const layers = state.layers || [];
+  for (const layer of [...layers].reverse()) {
+    const row = document.createElement('div');
+    row.className = 'lrow' + (layer.id === activeLayer ? ' active' : '') + (hiddenLayers.has(layer.id) ? ' hidden' : '');
+    const shown = !hiddenLayers.has(layer.id);
+    const hasAgent = state.items.some((it) => it.layer === layer.id && it.author === 'claude');
+    row.innerHTML = `<button class="eye" title="${shown ? 'Hide' : 'Show'}" aria-label="${shown ? 'Hide' : 'Show'} layer">${svgIcon(shown ? 'eye' : 'eye-off')}</button>`
+      + `<span class="name"></span>${hasAgent ? `<span class="agent" title="The agent drew on this layer">${svgIcon('agent')}</span>` : ''}`
+      + `<button class="ren" title="Rename" aria-label="Rename layer">${svgIcon('pen')}</button>`
+      + (layers.length > 1 ? `<button class="del" title="Delete layer" aria-label="Delete layer">${svgIcon('x')}</button>` : '');
+    row.querySelector('.name').textContent = layer.name;
+    // Drag rows to reorder; the list shows the top layer first.
+    row.draggable = true;
+    row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/x-doodle-layer', layer.id); e.dataTransfer.effectAllowed = 'move'; });
+    row.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer.types.includes('text/x-doodle-layer')) return;
+      e.preventDefault();
+      const r = row.getBoundingClientRect();
+      row.classList.toggle('drop-above', e.clientY < r.top + r.height / 2);
+      row.classList.toggle('drop-below', e.clientY >= r.top + r.height / 2);
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drop-above', 'drop-below'));
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const above = row.classList.contains('drop-above');
+      row.classList.remove('drop-above', 'drop-below');
+      const id = e.dataTransfer.getData('text/x-doodle-layer');
+      const order = layers.map((l) => l.id).filter((x) => x !== id);
+      const at = order.indexOf(layer.id);
+      if (!id || id === layer.id || at < 0) return;
+      // "Above" in the list means higher in the stack, i.e. after it in bottom-to-top order.
+      post('/api/ops', { author: 'user', moveLayer: { id, index: above ? at + 1 : at } });
+    });
+    row.title = 'Click to draw on this layer, double-click to rename';
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.ren')) { startRename(row, layer); return; }
+      if (e.target.closest('.eye')) {
+        hiddenLayers.has(layer.id) ? hiddenLayers.delete(layer.id) : hiddenLayers.add(layer.id);
+        selection = new Set();
+      } else if (e.target.closest('.del')) {
+        const count = state.items.filter((it) => it.layer === layer.id).length;
+        askConfirm(count ? `Delete "${layer.name}" and the ${count} drawing${count > 1 ? 's' : ''} on it?` : `Delete "${layer.name}"?`, 'Delete',
+          () => post('/api/ops', { author: 'user', removeLayer: layer.id }));
+        return;
+      } else activeLayer = layer.id;
+      renderLayers(); render();
+    });
+    row.querySelector('.name').addEventListener('dblclick', () => startRename(row, layer));
+    list.appendChild(row);
+  }
+}
+
+function startRename(row, layer) {
+  renaming = layer.id;
+  const input = document.createElement('input');
+  input.value = layer.name;
+  row.querySelector('.name').replaceWith(input);
+  input.focus(); input.select();
+  const done = (save) => {
+    if (renaming !== layer.id) return;
+    renaming = null;
+    const name = input.value.trim();
+    if (save && name && name !== layer.name) post('/api/ops', { author: 'user', renameLayer: { id: layer.id, name } });
+    renderLayers();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) done(true);
+    if (e.key === 'Escape') done(false);
+  });
+  input.addEventListener('blur', () => done(true));
+}
+
+$('addLayer').addEventListener('click', async () => {
+  const r = await post('/api/ops', { author: 'user', addLayer: true });
+  if (r.layer) { activeLayer = r.layer; renderLayers(); }
+});
+
+function toggleLayers() {
+  const open = $('layers').classList.toggle('open');
+  $('layersBtn').setAttribute('aria-pressed', String(open));
+}
+$('layersBtn').addEventListener('click', toggleLayers);
+
+// Our own dialog rather than confirm(), whose title shows the page address.
+function askConfirm(text, okLabel, onOk) {
+  const box = $('confirmBox');
+  $('confirmText').textContent = text;
+  box.querySelector('button[value="ok"]').textContent = okLabel;
+  box.returnValue = '';
+  box.onclose = () => { if (box.returnValue === 'ok') onOk(); };
+  box.showModal();
+}
+
+// ---- fill tool: a paint bucket like in Paint. Clicking floods every connected pixel of the same
+// color (what's on screen, all visible layers) with the current color, fully opaque, and adds the
+// result as an image on the active layer.
+
+const FILL_TOLERANCE = 48;  // per channel, so anti-aliased edges count as the line, not the gap
+
+function floodFill(px, w, h, sx, sy) {
+  const seed = px[sy * w + sx];
+  const sr = seed & 255, sg = (seed >>> 8) & 255, sb = (seed >>> 16) & 255, sa = seed >>> 24;
+  const near = (c) => Math.abs((c & 255) - sr) <= FILL_TOLERANCE && Math.abs(((c >>> 8) & 255) - sg) <= FILL_TOLERANCE
+    && Math.abs(((c >>> 16) & 255) - sb) <= FILL_TOLERANCE && Math.abs((c >>> 24) - sa) <= FILL_TOLERANCE;
+  const mask = new Uint8Array(w * h);
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  const stack = [sx, sy];
+  while (stack.length) {
+    const y = stack.pop();
+    let x = stack.pop();
+    let i = y * w + x;
+    while (x >= 0 && !mask[i] && near(px[i])) { x--; i--; }
+    x++; i++;
+    let up = false, down = false;
+    while (x < w && !mask[i] && near(px[i])) {
+      mask[i] = 1;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (y > 0) { const a = i - w; if (!mask[a] && near(px[a])) { if (!up) { stack.push(x, y - 1); up = true; } } else up = false; }
+      if (y < h - 1) { const b = i + w; if (!mask[b] && near(px[b])) { if (!down) { stack.push(x, y + 1); down = true; } } else down = false; }
+      x++; i++;
+    }
+  }
+  return x1 < 0 ? null : { mask, x0, y0, x1, y1 };
+}
+
+async function fillAt(p) {
+  const W = canvasSize.width, H = canvasSize.height;
+  const k = Math.min(2, Math.sqrt(6e6 / (W * H)));  // 2x for crisp edges, less on huge pages
+  const off = document.createElement('canvas');
+  off.width = Math.round(W * k); off.height = Math.round(H * k);
+  const g = off.getContext('2d', { willReadFrequently: true });
+  g.setTransform(k, 0, 0, k, 0, 0);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  for (const it of visibleItems()) drawItem(g, it);
+  const w = off.width, h = off.height;
+  const sx = Math.min(w - 1, Math.max(0, Math.floor(p[0] * k))), sy = Math.min(h - 1, Math.max(0, Math.floor(p[1] * k)));
+  const px = new Uint32Array(g.getImageData(0, 0, w, h).data.buffer);
+  const region = floodFill(px, w, h, sx, sy);
+  if (!region) return;
+  // Grow the region by a pixel so it tucks under anti-aliased edges instead of leaving a light seam.
+  const x0 = Math.max(0, region.x0 - 1), y0 = Math.max(0, region.y0 - 1);
+  const x1 = Math.min(w - 1, region.x1 + 1), y1 = Math.min(h - 1, region.y1 + 1);
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  const out = new ImageData(bw, bh);
+  const n = parseInt(color.slice(1), 16), r = (n >> 16) & 255, gg = (n >> 8) & 255, b = n & 255;
+  const m = region.mask;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const i = y * w + x;
+      const hit = m[i] || (x > 0 && m[i - 1]) || (x < w - 1 && m[i + 1]) || (y > 0 && m[i - w]) || (y < h - 1 && m[i + w]);
+      if (!hit) continue;
+      const o = ((y - y0) * bw + (x - x0)) * 4;
+      out.data[o] = r; out.data[o + 1] = gg; out.data[o + 2] = b; out.data[o + 3] = 255;
+    }
+  }
+  const crop = document.createElement('canvas');
+  crop.width = bw; crop.height = bh;
+  crop.getContext('2d').putImageData(out, 0, 0);
+  const src = crop.toDataURL('image/png');
+  await new Promise((done) => { const img = imageFor(src); if (img.complete) done(); else img.addEventListener('load', done, { once: true }); });
+  addItems([{ type: 'image', src, x: x0 / k, y: y0 / k, w: bw / k, h: bh / k, fill: true }]);
+}
 
 $('undo').addEventListener('click', () => post('/api/undo'));
+$('redo').addEventListener('click', () => post('/api/redo'));
 $('clear').addEventListener('click', () => {
-  if (state.items.length && confirm('Clear the whole canvas, including Claude\'s drawings?')) post('/api/ops', { author: 'user', clear: 'all', say: null });
+  if (!state.items.length) return;
+  askConfirm("Clear the whole canvas, including the agent's drawings?", 'Clear',
+    () => post('/api/ops', { author: 'user', clear: 'all', say: null }));
 });
 
 function toast(msg) {
@@ -467,12 +1568,24 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 1800);
 }
 
+let sending = false;
 async function send(answer) {
-  const typed = $('note').value.trim();
-  const note = answer ? [answer, typed].filter(Boolean).join(' — ') : typed;
-  const r = await post('/api/send', { png: snapshot(), note });
-  $('note').value = '';
-  toast(r.delivered ? 'Sent to Claude' : 'Saved. Claude will see it next time it listens');
+  if (sending) return;  // one send at a time, even with Ctrl+Enter held down
+  sending = true;
+  const btn = $('send');
+  btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+  try {
+    const typed = $('note').value.trim();
+    const note = answer ? [answer, typed].filter(Boolean).join(' — ') : typed;
+    const r = await post('/api/send', { png: snapshot(), note });
+    $('note').value = '';
+    toast(r.delivered ? 'Sent' : 'Saved. The agent will see it next time it listens');
+  } catch {
+    toast("Couldn't send. Is the canvas server still running?");
+  } finally {
+    sending = false;
+    btn.disabled = false; btn.removeAttribute('aria-busy');
+  }
 }
 $('send').addEventListener('click', () => send());
 document.querySelectorAll('[data-answer]').forEach((b) => b.addEventListener('click', () => send(b.dataset.answer)));
@@ -480,14 +1593,84 @@ $('note').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
 });
 
+// ---------------------------------------------------------------- clipboard
+// Copy/cut the selection as JSON (also readable as text elsewhere). Paste takes copied items,
+// an image (screenshot, copied picture) or plain text, and leaves what was pasted selected.
+
+const CLIP_TAG = 'doodle-prompt/items';
+const typing = () => document.activeElement && document.activeElement.closest('input, textarea');
+let pasteCount = 0;
+
+function copySelection(e, cut) {
+  const items = selectedItems();
+  if (!items.length || typing()) return;
+  e.clipboardData.setData('text/plain', JSON.stringify({ [CLIP_TAG]: items.map(({ id, author, layer, ...shape }) => shape) }));
+  e.preventDefault();
+  pasteCount = 0;
+  if (cut) deleteSelection();
+  toast(cut ? 'Cut' : 'Copied');
+}
+document.addEventListener('copy', (e) => copySelection(e, false));
+document.addEventListener('cut', (e) => copySelection(e, true));
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result); r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+document.addEventListener('paste', async (e) => {
+  if (typing()) return;
+  const data = e.clipboardData;
+  const file = [...data.files].find((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.type));
+  const text = data.getData('text/plain');
+  e.preventDefault();
+  if (file) {
+    const src = await readFile(file);
+    const img = imageFor(src);
+    await new Promise((r) => { if (img.complete) r(); else img.addEventListener('load', r, { once: true }); });
+    // Fit inside half the canvas, centered.
+    const k = Math.min(1, (canvasSize.width / 2) / img.naturalWidth, (canvasSize.height / 2) / img.naturalHeight);
+    const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+    return addAndSelect([{ type: 'image', src, x: Math.round((canvasSize.width - w) / 2), y: Math.round((canvasSize.height - h) / 2), w, h }]);
+  }
+  if (!text) return;
+  let shapes = null;
+  try { const data = JSON.parse(text); shapes = data[CLIP_TAG] || (data['doodle-prompt/item'] ? [data['doodle-prompt/item']] : null); } catch {}
+  if (shapes) {
+    pasteCount += 1;
+    return addAndSelect(shapes.map((s) => translated(s, 20 * pasteCount, 20 * pasteCount)));
+  }
+  addAndSelect([{ type: 'text', x: 80, y: 120, text: text.slice(0, 2000), color, size: 24 }]);
+});
+
 document.addEventListener('keydown', (e) => {
-  if (e.target === textInput || e.target === $('note')) return;
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); post('/api/undo'); return; }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); return; }
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key === 'p') setTool('pen');
-  if (e.key === 'e') setTool('eraser');
-  if (e.key === 't') setTool('text');
+  if (e.target.closest('input, textarea')) return;
+  const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+  if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); setZoom(zoom * 1.25); return; }
+  if (mod && e.key === '-') { e.preventDefault(); setZoom(zoom / 1.25); return; }
+  if (mod && e.key === '0') { e.preventDefault(); setZoom(1); return; }
+  if (mod && (key === 'y' || (key === 'z' && e.shiftKey))) { e.preventDefault(); post('/api/redo'); return; }
+  if (mod && key === 'z') { e.preventDefault(); post('/api/undo'); return; }
+  if (mod && e.key === 'Enter') { e.preventDefault(); send(); return; }
+  if (mod && key === 'a') { e.preventDefault(); selectAll(); return; }
+  if (mod && key === 'd' && selection.size) { e.preventDefault(); duplicateSelection(); return; }
+  if (mod || e.altKey) return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selection.size) { e.preventDefault(); deleteSelection(); return; }
+  if (e.key === 'Escape' && selection.size) { setSelection([]); return; }
+  const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  if (arrows[e.key] && selection.size) {
+    e.preventDefault();
+    const step = e.shiftKey ? 10 : 1;
+    nudgeSelection(arrows[e.key][0] * step, arrows[e.key][1] * step);
+    return;
+  }
+  if (e.key === 'l') { toggleLayers(); return; }
+  if (e.key === 'c') { $('sideToggle').click(); return; }
+  const tools = { f: 'fill', v: 'select', s: 'lasso', p: 'pen', e: 'eraser', t: 'text', r: 'rect', o: 'ellipse', a: 'arrow' };
+  if (tools[e.key]) setTool(tools[e.key]);
 });
 
 fit();

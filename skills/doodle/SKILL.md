@@ -15,7 +15,7 @@ node "${CLAUDE_PLUGIN_ROOT}/src/doodle.mjs" <command>
 
 Below, `doodle` stands for that command.
 
-Data lives in `.doodle/` under the current working directory (it ignores itself in git). Canvas coordinates are logical pixels, 1200 × 800, origin top-left.
+Data lives in `.doodle/` under the current working directory (it ignores itself in git). Canvas coordinates are logical pixels, origin top-left. The page is 1200 × 800 unless the user resized it; `wait` and `state` print the current size (`canvas WxH`). Top-level `resize` (`{"width": W, "height": H}`) changes it, but leave the size to the user unless they ask.
 
 ## The loop
 
@@ -23,16 +23,18 @@ Data lives in `.doodle/` under the current working directory (it ignores itself 
 2. **Listen**: run `doodle wait` with Bash `run_in_background: true`. You're re-invoked when the user presses Send, and the conversation stays free while they draw. Never poll, and keep exactly one `wait` running: start a new one only after the previous one has exited.
 3. **Read**: the wait output gives the user's note, the image path, and every item with its id and bounds. Open the image with Read. Use both the picture (what it looks like) and the item list (exact positions, ids).
 4. **Interpret in context**: decide what the sketch means given the conversation and repo: a UI layout, a flow, a data model, an architecture, a game level, an annotation of something. Don't stack up questions; ask by drawing (see below).
-5. **Confirm your reading**: say back what you understood, in one short sentence ending in a question, as a `say` bubble with `"ask": true` (for example "A login screen that leads to a dashboard, right?"). That puts **Yes** / **Not quite** buttons on the bubble, so the user can answer with one click. Repeat the same sentence in chat. Do this on the first send of a session, whenever the sketch is ambiguous, and before you replace the user's strokes or build anything outside the canvas. Skip it for small follow-ups whose meaning is obvious, such as a check mark on an option you offered.
+5. **Confirm your reading**: say back what you understood, in one short sentence ending in a question, as a `say` message with `"ask": true` (for example "A login screen that leads to a dashboard, right?"). That puts **Yes** / **Not quite** buttons under it in the chat panel, so the user can answer with one click. Repeat the same sentence in chat. Do this on the first send of a session, whenever the sketch is ambiguous, and before you replace the user's strokes or build anything outside the canvas. Skip it for small follow-ups whose meaning is obvious, such as a check mark on an option you offered.
    - When you're unsure, don't remove the user's strokes yet: draw your reading next to them and remove theirs after a **Yes**.
    - A send whose note starts with `yes` or `no` is an answer from those buttons; anything after the dash is what the user typed with it. On `no`, look again, offer a different reading or a choice between two, and ask again.
 6. **Answer on the canvas**, then in chat in a sentence or two. Pick what moves the sketch forward:
    - **Clean up**: redraw rough strokes as clear shapes with labels, then remove the user's strokes you replaced. Only replace what you're confident about.
    - **Extend**: add the missing piece, a next step, an alternative next to theirs.
    - **Ask by drawing**: a dashed box with `?`, an arrow with a question, two small options side by side.
-   - **Comment**: `say` puts a short speech bubble at the top of the canvas. Keep it under ~15 words.
+   - **Comment**: `say` posts a short message in the chat panel beside the canvas, where the user's notes and sent sketches also appear. Keep it under ~20 words.
 7. **Check your work**: `draw` prints the refreshed `canvas.png`. Read it when the layout is non-trivial, and fix overlaps.
 8. **Listen again**: start another background `wait`. Repeat until the user stops sending or asks you to build the thing.
+
+Keep a `wait` running even while you work on something the sketch asked for (editing code, running checks): start it right after you answer on the canvas, before the longer work, so the user can keep drawing and sending. A send that arrives mid-task wakes you; finish or pause the current step, then read it.
 
 **When `wait` prints "The canvas window was closed."**, the user is done drawing for now. Don't start another `wait`. Run `doodle stop`, and tell the user in one line that the canvas is closed and they can ask to draw again any time. The sketch is kept in `.doodle/`, so a later `doodle start` reopens it as it was.
 
@@ -59,7 +61,7 @@ node "${CLAUDE_PLUGIN_ROOT}/src/doodle.mjs" draw - <<'EOF'
 EOF
 ```
 
-Shapes (all coordinates in the 1200 × 800 space):
+Shapes (all coordinates in canvas space):
 
 | type | fields |
 |---|---|
@@ -69,24 +71,28 @@ Shapes (all coordinates in the 1200 × 800 space):
 | `polygon` | `points` (closed automatically), optional `fill`, `text`: roofs, arrows-as-shapes, any filled outline |
 | `stroke` | `points` freehand, for when you want a loose doodle |
 
-Optional on any shape: `color` (default Claude orange, so the user can tell your marks from theirs), `width`, `dashed`, `fill` (e.g. `"rgba(201,100,66,.08)"`), `size` for label text.
+Optional on any shape: `layer` (a layer id like `L2` or a name; an unknown name creates that layer on top; default is the top layer), `color` (default agent violet `#6c4cf5`, so the user can tell your marks from theirs), `width`, `dashed`, `fill` (e.g. `"rgba(108,76,245,.08)"`), `size` for label text.
 
-Top-level keys: `add`, `remove` (ids from `state`/`wait` output), `clear` (`"claude"`, `"user"`, or `"all"`), `say` (string, or `null` to hide the bubble), `ask` (`true` adds **Yes** / **Not quite** buttons to that bubble; they go away once the user sends).
+Top-level keys: `addLayer` (a name, creates a layer on top), `renameLayer` (`{"id": "L2", "name": "..."}`), `add`, `remove` (ids from `state`/`wait` output), `update` (list of `{"id": ..., <fields>}` to change existing items in place, e.g. move one with new `x`/`y` or `points`), `clear` (`"claude"`, `"user"`, or `"all"`), `say` (string, added to the chat panel), `ask` (`true` adds **Yes** / **Not quite** buttons under that message; they go away once the user sends).
 
 Other commands:
 
 - `state` lists the items without waiting.
 - `check` returns a send that arrived while nobody was waiting, without blocking.
-- `undo` reverts the last change by anyone.
+- `undo` reverts the last change by anyone; `redo` brings it back.
 - `clear claude` removes only your marks.
 - `stop` shuts the server down when the user is done.
+
+## Layers
+
+The canvas has layers (bottom to top), listed in the `wait`/`state` output with each item's layer (`@L2`). The user can reorder, hide, rename, add and delete them; hiding only affects their screen, you always see everything. Items of type `image` are pictures the user pasted (screenshots and the like) or paint-bucket fills (marked `(bucket fill)`); look at them in the PNG. Use layers when they help: an alternative on its own layer the user can toggle, annotations kept apart from the drawing. Name them in the user's language. Don't create layers for single marks.
 
 ## Style
 
 - Match the doodle's level of detail. One clear step per turn beats a finished diagram nobody asked for.
 - Leave the user's intent intact. When you replace their strokes, keep the same position and proportions so the canvas still feels like theirs.
-- Write labels and `say` bubbles in the language the user writes or draws in, not the language of these examples.
-- Keep labels short (one to four words). Put explanations in chat or the bubble, not on the canvas.
+- Write labels and `say` messages in the language the user writes or draws in, not the language of these examples.
+- Keep labels short (one to four words). Put explanations in `say` or your reply, not on the canvas.
 - Leave room: don't fill the whole canvas. The user should have space to keep drawing.
 - If a send arrives with a note, the note wins over your reading of the picture.
 - When an instruction the user drew (a check mark, a word like "blue") has been carried out, remove those strokes and every option box you offered, so stale marks don't pile up.
