@@ -83,12 +83,12 @@ Claude:  … → [조인] → [투 타워 모델] → [랭킹 손실]   ✓ 구�
 캔버스는 일반 CLI로 조작하니까, 셸 명령을 실행할 수 있는 에이전트라면 쓸 수 있어요.
 
 ```
-npx doodle-prompt start   # 캔버스 열기
-npx doodle-prompt wait    # 사용자가 Send를 누를 때까지 대기
-npx doodle-prompt draw -  # 표준 입력으로 받은 JSON 도형 그리기
+npx github:JuwonHwang/doodle-prompt start   # 캔버스 열기
+npx github:JuwonHwang/doodle-prompt wait    # 사용자가 Send를 누를 때까지 대기
+npx github:JuwonHwang/doodle-prompt draw -  # 표준 입력으로 받은 JSON 도형 그리기
 ```
 
-`npx doodle-prompt help`로 전체 명령을 볼 수 있어요. 주고받는 절차와 도형 형식은 [`skills/doodle/SKILL.md`](skills/doodle/SKILL.md)에 있어요. 지금은 Claude Code에서만 테스트했어요.
+`npx github:JuwonHwang/doodle-prompt help`로 전체 명령을 볼 수 있어요(`#v0.2.0`처럼 릴리스를 고정할 수 있어요). 주고받는 절차와 도형 형식은 [`skills/doodle/SKILL.md`](skills/doodle/SKILL.md)에 있어요. 지금은 Claude Code에서만 테스트했고, Windows 앱은 아직 Windows에서 실행해 보지 않았어요.
 
 ## 🔒 모든 게 내 컴퓨터 안에서
 

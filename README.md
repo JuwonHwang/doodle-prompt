@@ -83,12 +83,12 @@ Pen, shapes, arrows, text, a paint bucket, Paint-style selection (move, scale, f
 The canvas is driven by a plain CLI, so any agent that can run shell commands can use it:
 
 ```
-npx doodle-prompt start   # open the canvas
-npx doodle-prompt wait    # block until the user presses Send
-npx doodle-prompt draw -  # draw shapes from JSON on stdin
+npx github:JuwonHwang/doodle-prompt start   # open the canvas
+npx github:JuwonHwang/doodle-prompt wait    # block until the user presses Send
+npx github:JuwonHwang/doodle-prompt draw -  # draw shapes from JSON on stdin
 ```
 
-`npx doodle-prompt help` lists every command, and [`skills/doodle/SKILL.md`](skills/doodle/SKILL.md) describes the loop and the shape format. Only Claude Code is tested today.
+`npx github:JuwonHwang/doodle-prompt help` lists every command (pin a release with `#v0.2.0`), and [`skills/doodle/SKILL.md`](skills/doodle/SKILL.md) describes the loop and the shape format. Only Claude Code is tested today, and the Windows app has not been run on Windows yet.
 
 ## 🔒 Local by design
 

@@ -149,10 +149,15 @@
   #sideToggle.has-ask::after { content: ''; position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 50%;
     background: var(--coral); border: 2px solid var(--edge); }
   #sideToggle { position: relative; }
-  #side header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: var(--b) solid var(--edge); }
+  /* Buttons keep their size and the title gives way, so nothing is pushed out on a narrow panel. */
+  #side { container-type: inline-size; }
+  #side header { display: flex; align-items: center; gap: 6px; padding: 12px 14px; border-bottom: var(--b) solid var(--edge); }
+  #side header > * { flex-shrink: 0; }
   #side header > .ic { color: #fff; background: var(--agent); border: 2px solid var(--edge); border-radius: 8px;
     width: 30px; height: 30px; padding: 4px; box-shadow: 2px 2px 0 var(--drop); }
-  #side header b { flex: 1; font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+  #side header b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+  @container (max-width: 270px) { #side header > .ic { display: none; } }
   #side header .hbtn, #status { width: 32px; height: 32px; min-width: 32px; padding: 0; display: grid; place-items: center;
     border: 2px solid var(--edge); border-radius: 8px; background: var(--chrome); box-shadow: 2px 2px 0 var(--drop); }
   #side header .hbtn:hover { background: var(--coral); }

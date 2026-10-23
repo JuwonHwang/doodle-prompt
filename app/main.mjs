@@ -138,7 +138,7 @@ async function showLast() {
     <body style="font:15px/1.5 system-ui,sans-serif;margin:32px;color:#141414;background:#fff6df">
     <h3 style="margin:0 0 8px">No canvas is running</h3>
     <p>Start one from your coding agent, for example <code>/doodle</code> in Claude Code, or run
-    <code>npx doodle-prompt start</code> in your project.</p></body>`)}`);
+    <code>npx github:JuwonHwang/doodle-prompt start</code> in your project.</p></body>`)}`);
   win = w;
 }
 

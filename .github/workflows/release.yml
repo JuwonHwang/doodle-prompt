@@ -10,7 +10,17 @@ permissions:
   contents: write
 
 jobs:
+  # Create the draft once, before the builds: two builds that both find no release each create one,
+  # and the macOS and Windows files end up on separate drafts.
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --title "$GITHUB_REF_NAME" --notes ""
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
+    needs: draft
     strategy:
       matrix:
         os: [macos-latest, windows-latest]

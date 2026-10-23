@@ -4,7 +4,7 @@ English | 한국어 below
 
 ## Issues: welcome
 
-Open an issue for bugs, ideas, or support for another coding agent. For a bug, include your OS, how you started the canvas (plugin, `npx doodle-prompt`, overlay or window), and what you saw.
+Open an issue for bugs, ideas, or support for another coding agent. For a bug, include your OS, how you started the canvas (plugin, `npx github:JuwonHwang/doodle-prompt`, overlay or window), and what you saw.
 
 ## Pull requests: not accepted
 
@@ -18,7 +18,7 @@ doodle-prompt is MIT licensed. You may fork it, change it, and ship your own ver
 
 ## 이슈: 환영해요
 
-버그, 아이디어, 다른 코딩 에이전트 지원 요청은 이슈로 남겨 주세요. 버그라면 OS, 캔버스를 연 방법(플러그인, `npx doodle-prompt`, 오버레이 또는 창), 어떤 현상이 나타났는지 적어 주세요.
+버그, 아이디어, 다른 코딩 에이전트 지원 요청은 이슈로 남겨 주세요. 버그라면 OS, 캔버스를 연 방법(플러그인, `npx github:JuwonHwang/doodle-prompt`, 오버레이 또는 창), 어떤 현상이 나타났는지 적어 주세요.
 
 ## PR: 받지 않아요
 
