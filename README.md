@@ -51,7 +51,13 @@ If you would reach for a whiteboard to explain it to a colleague, draw it here i
 - **Keep talking while you draw.** Claude listens in the background, so your chat never blocks your sketch.
 - **Undo anything**, yours or Claude's.
 
+## 📸 Capture, then explain
+
+Hit the camera button and whatever is on your screen lands on the canvas. Then mark it up: circle the outlier in a plot, box the stage that's slow in a profiler, arrow from the error to the line you suspect. Claude sees the capture and your marks together.
+
 ## 🎨 A real drawing tool
+
+**Arrows that stick.** Start an arrow on a box and end it on another, and it stays connected when you move either one. Rearrange a pipeline without redrawing it. **Double-click any label** to edit it.
 
 Pen, shapes, arrows, text, a paint bucket, Paint-style selection (move, scale, flip, rotate, duplicate), layers you can reorder, hide and rename, and paste-in screenshots. Every tool has a single-key shortcut.
 

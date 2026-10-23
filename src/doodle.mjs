@@ -52,11 +52,17 @@ function serve() {
   const waiters = new Set();
   const snapshotWaiters = new Set();
   const clients = new Set();
+  // What the agent is doing with the user's last send, for the page's "looking at it" indicator:
+  // null, or { phase: 'queued' (nobody listening yet) | 'reading' (delivered), at }. Cleared when the
+  // agent draws or says something, or starts listening again (it is done with that send).
+  let thinking = null;
+  const THINKING_MAX_MS = 15 * 60 * 1000;
   let closedAt = null;  // when the last canvas window disconnected; null while one is open or none has been yet
 
   const publicState = () => ({
     version: state.version, layers: state.layers, items: state.items, say: state.say, ask: state.ask, chat: state.chat,
     canvas: state.canvas, waiting: waiters.size > 0, viewers: clients.size,
+    thinking: thinking && Date.now() - thinking.at < THINKING_MAX_MS ? thinking : null,
   });
 
   function broadcast() {
@@ -187,6 +193,14 @@ function serve() {
       state.ask = Boolean(body.ask && state.say);
       if (state.say) logChat('agent', state.say);
     }
+    // An arrow's `from`/`to` may name a shape added by this same op as "#n".
+    const added = new Set(ids);
+    for (const it of state.items) {
+      if (!added.has(it.id)) continue;
+      for (const end of ['from', 'to']) if (/^#\d+$/.test(it[end] || '')) it[end] = ids[Number(it[end].slice(1))] || null;
+    }
+    reattach(state.items);
+    if (author === 'claude') thinking = null;
     commit();
     return { ids, layer: layerId };
   }
@@ -200,6 +214,7 @@ function serve() {
     };
     for (const w of [...waiters]) w(result);
     waiters.clear();
+    thinking = { phase: 'reading', at: thinking ? thinking.at : Date.now() };
     broadcast();
   }
 
@@ -315,6 +330,7 @@ function serve() {
         writePng(path.join(SENDS_DIR, img), body.png);
         logChat('user', note, fs.existsSync(path.join(SENDS_DIR, img)) ? { img } : {});
         state.ask = false;
+        thinking = { phase: 'queued', at: Date.now() };
         commit();
         flushSends();
         return json(res, 200, { ok: true, delivered: pendingSends.length === 0 });
@@ -334,6 +350,8 @@ function serve() {
         const t = setTimeout(() => { waiters.delete(finish); broadcast(); finish({ timeout: true }); }, timeout);
         req.on('close', () => { if (!done) { done = true; clearTimeout(t); waiters.delete(finish); broadcast(); } });
         waiters.add(finish);
+        // Listening again after a delivered send means the agent has finished with it.
+        if (thinking && thinking.phase === 'reading') thinking = null;
         broadcast();
         flushSends();
         return;
@@ -427,7 +445,7 @@ function findApp() {
 function launchApp(url, mode) {
   const app = findApp();
   if (!app) throw new Error(`the doodle-prompt app is not installed. Download it from ${RELEASES}, then run start again`);
-  const args = [`--doodle-url=${url}`, ...(mode ? [`--doodle-mode=${mode}`] : [])];
+  const args = [`--doodle-url=${url}`, ...(mode ? [`--doodle-mode=${mode}`] : []), `--doodle-log=${path.join(DATA_DIR, 'app.log')}`];
   const [cmd, argv, shell] =
     typeof app === 'object' ? [app.dev, [app.root, ...args], process.platform === 'win32']
     // `open -n` starts a second instance, which hands its arguments to the running one and exits.
@@ -458,6 +476,41 @@ async function start(flags) {
   console.log(`Data:   ${DATA_DIR}`);
 }
 
+// ---------------------------------------------------------------- connected arrows
+// A line or arrow with `from`/`to` (item ids) starts and ends on the edges of those items, so it
+// follows them when they move. The page draws the same geometry while a drag is in progress.
+
+const CONNECTABLE = new Set(['rect', 'ellipse', 'text', 'image', 'polygon']);
+
+function edgePoint(target, toward) {
+  const [x1, y1, x2, y2] = bbox(target);
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, hw = (x2 - x1) / 2 + 4, hh = (y2 - y1) / 2 + 4;
+  const dx = toward[0] - cx, dy = toward[1] - cy;
+  if (!dx && !dy) return [cx, cy];
+  const t = target.type === 'ellipse' ? 1 / Math.hypot(dx / hw, dy / hh) : Math.min(hw / Math.abs(dx || 1e-9), hh / Math.abs(dy || 1e-9));
+  return [Math.round((cx + dx * t) * 10) / 10, Math.round((cy + dy * t) * 10) / 10];
+}
+
+function attached(it, byId) {
+  if (!(it.type === 'arrow' || it.type === 'line') || !Array.isArray(it.points) || it.points.length < 2) return it;
+  const A = it.from && byId.get(it.from), B = it.to && byId.get(it.to);
+  if (!A && !B) return it;
+  const center = (t) => { const [x1, y1, x2, y2] = bbox(t); return [(x1 + x2) / 2, (y1 + y2) / 2]; };
+  const pts = it.points.map((p) => [...p]), n = pts.length;
+  if (A) pts[0] = edgePoint(A, n > 2 ? pts[1] : B ? center(B) : pts[n - 1]);
+  if (B) pts[n - 1] = edgePoint(B, n > 2 ? pts[n - 2] : A ? center(A) : pts[0]);
+  return { ...it, points: pts };
+}
+
+// Recompute every connected arrow; drop links to items that are gone.
+function reattach(items) {
+  const byId = new Map(items.filter((it) => CONNECTABLE.has(it.type)).map((it) => [it.id, it]));
+  items.forEach((it, i) => {
+    for (const end of ['from', 'to']) if (it[end] && !byId.has(it[end])) delete it[end];
+    if (it.from || it.to) items[i] = attached(it, byId);
+  });
+}
+
 function bbox(it) {
   if (it.points) {
     const xs = it.points.map((p) => p[0]); const ys = it.points.map((p) => p[1]);
@@ -478,7 +531,9 @@ function describe(state) {
   if (layers.length) lines.push(`layers (bottom to top): ${layers.map((l) => `${l.id} "${l.name}"`).join(', ')}`);
   for (const it of state.items) {
     const [x1, y1, x2, y2] = bbox(it);
-    const extra = it.text ? ` "${it.text}"` : it.type === 'stroke' ? ` (${it.points.length} pts)` : it.type === 'image' && it.fill ? ' (bucket fill)' : '';
+    const link = it.from || it.to ? ` (${it.from || '·'} → ${it.to || '·'})` : '';
+    const extra = link + (it.text ? ` "${it.text}"` : it.type === 'stroke' ? ` (${it.points.length} pts)`
+      : it.type === 'image' && it.fill ? ' (bucket fill)' : '');
     const on = layers.length > 1 ? ` @${it.layer}` : '';
     lines.push(`  ${it.id} ${it.author} ${it.type}${on} [${x1},${y1} → ${x2},${y2}]${extra}`);
   }

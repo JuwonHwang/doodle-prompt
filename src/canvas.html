@@ -172,7 +172,27 @@
   .msg:hover .mdel, .msg .mdel:focus-visible { display: inline-flex; align-items: center; justify-content: center; }
   @media (pointer: coarse) { .msg .mdel { display: inline-flex; align-items: center; justify-content: center; } }
   @keyframes pop { from { transform: translateY(6px) scale(.97); opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .msg.new { animation: none; } }
+  /* The agent's replies spring in from their corner. */
+  .msg.agent.new { animation: boing .55s cubic-bezier(.3,1.7,.5,1); transform-origin: bottom left; }
+  @keyframes boing { from { transform: scale(.4); opacity: 0; } 40% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .msg.new, .msg.agent.new { animation: none; } }
+
+  /* While the agent has the last send: three bouncing dots and how long it has been. Queued (nobody
+     listening yet) is the same bubble, gray and still. */
+  .msg.typing { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+  .msg.typing .dots { display: inline-flex; gap: 4px; }
+  .msg.typing .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--agent); animation: bob 1s ease-in-out infinite; }
+  .msg.typing .dots i:nth-child(2) { animation-delay: .15s; }
+  .msg.typing .dots i:nth-child(3) { animation-delay: .3s; }
+  .msg.typing.queued { background: transparent; box-shadow: none; border-style: dashed; }
+  .msg.typing.queued .dots i { background: var(--muted); animation: none; opacity: .5; }
+  @keyframes bob { 0%, 80%, 100% { transform: translateY(0); opacity: .45; } 40% { transform: translateY(-5px); opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .msg.typing .dots i { animation: none; opacity: .8; } }
+
+  /* Send: the paper plane takes off and comes back. */
+  #send.flying .ic { animation: fly .7s cubic-bezier(.5,0,.3,1); }
+  @keyframes fly { 45% { transform: translate(22px, -22px) scale(.6); opacity: 0; } 46% { transform: translate(-14px, 14px) scale(.6); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { #send.flying .ic { animation: none; } }
   .chat-empty { color: var(--muted); font-size: 13px; margin: auto; text-align: center; max-width: 220px; }
   #answers { display: none; gap: 8px; padding: 0 14px 12px; }
   #answers.show { display: flex; }
@@ -258,6 +278,8 @@
   .overlay-only { display: none !important; }
   html.overlay .overlay-only { display: flex !important; }
   /* Shown in the desktop app's normal window: the button that turns it into the overlay. */
+  .app-only { display: none !important; }
+  html.app .app-only { display: flex !important; }
   .window-only { display: none !important; }
   html.app:not(.overlay) .window-only { display: flex !important; }
   html.overlay, html.overlay body { background: transparent; }
@@ -317,6 +339,7 @@
   <symbol id="i-listening" viewBox="0 0 24 24"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></symbol>
   <symbol id="i-overlay" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 7-6"/></symbol>
   <symbol id="i-window" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/><path d="M6 4v5"/><path d="M10 4v5"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
   <symbol id="i-click" viewBox="0 0 24 24"><path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.04 9.69a.5.5 0 0 1 .65-.65l11 4.5a.5.5 0 0 1-.07.95l-4.35 1.04a1 1 0 0 0-.74.74l-1.04 4.35a.5.5 0 0 1-.95.07z"/></symbol>
   <symbol id="i-busy"viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></symbol>
 </svg>
@@ -384,6 +407,10 @@
   </div>
   <div class="group" role="group" aria-label="Layers">
     <button id="layersBtn" aria-pressed="false" title="Layers (L)" aria-label="Layers"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></button>
+  </div>
+  <div class="sep app-only"></div>
+  <div class="group app-only" role="group" aria-label="Capture">
+    <button id="captureBtn" title="Capture the screen onto the canvas, then draw on it" aria-label="Capture the screen onto the canvas"><svg class="ic" aria-hidden="true"><use href="#i-camera"/></svg></button>
   </div>
   <div class="sep window-only"></div>
   <div class="group window-only" role="group" aria-label="Overlay">
@@ -661,8 +688,39 @@ function visibleItems(all = false) {
     .map((it, i) => [order.get(it.layer) ?? 0, i, it])
     .sort((a, b) => a[0] - b[0] || a[1] - b[1])
     .map(([, , it]) => it);
-  return [...items, ...pending.map((p) => p.item)];
+  return resolveLinks([...items, ...pending.map((p) => p.item)]);
 }
+
+// ---------------------------------------------------------------- connected arrows
+// An arrow or line with `from`/`to` (item ids) starts and ends on those shapes' edges, so it follows
+// them while they are dragged. The server stores the same geometry (reattach in doodle.mjs).
+const CONNECTABLE = new Set(['rect', 'ellipse', 'text', 'image', 'polygon']);
+
+function edgePoint(target, toward) {
+  const [x1, y1, x2, y2] = itemBox(target);
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, hw = (x2 - x1) / 2 + 4, hh = (y2 - y1) / 2 + 4;
+  const dx = toward[0] - cx, dy = toward[1] - cy;
+  if (!dx && !dy) return [cx, cy];
+  const t = target.type === 'ellipse' ? 1 / Math.hypot(dx / hw, dy / hh) : Math.min(hw / Math.abs(dx || 1e-9), hh / Math.abs(dy || 1e-9));
+  return [round1(cx + dx * t), round1(cy + dy * t)];
+}
+
+function resolveLinks(items) {
+  if (!items.some((it) => it.from || it.to)) return items;
+  const byId = new Map(items.filter((it) => CONNECTABLE.has(it.type)).map((it) => [it.id, it]));
+  const center = (t) => { const [x1, y1, x2, y2] = itemBox(t); return [(x1 + x2) / 2, (y1 + y2) / 2]; };
+  return items.map((it) => {
+    const A = it.from && byId.get(it.from), B = it.to && byId.get(it.to);
+    if ((!A && !B) || !it.points || it.points.length < 2) return it;
+    const pts = it.points.map((q) => [...q]), n = pts.length;
+    if (A) pts[0] = edgePoint(A, n > 2 ? pts[1] : B ? center(B) : pts[n - 1]);
+    if (B) pts[n - 1] = edgePoint(B, n > 2 ? pts[n - 2] : A ? center(A) : pts[0]);
+    return { ...it, points: pts };
+  });
+}
+
+// The topmost shape an arrow can connect to at p.
+const connectTarget = (p) => [...pickable()].reverse().find((it) => CONNECTABLE.has(it.type) && hits(it, p)) || null;
 
 let dots = null;
 function dotPattern(c) {
@@ -692,13 +750,61 @@ function paint(c, k, forSnapshot = false) {
   // Faint dot grid like a sketchbook page; on screen only, never in what the agent sees.
   if (!forSnapshot && !OVERLAY) { c.fillStyle = dotPattern(c); c.fillRect(0, 0, canvasSize.width, canvasSize.height); }
   const items = visibleItems(forSnapshot);
-  for (const it of items) drawItem(c, it);
+  const now = performance.now();
+  for (const it of items) forSnapshot ? drawItem(c, it) : drawPopping(c, it, now);
   if (forSnapshot) return;
-  if (drawing) drawItem(c, drawing);
+  if (drawing && drawing.type === 'arrow' && (drawing.from || drawing.to)) {
+    // Outline the shapes the arrow will connect to.
+    c.save();
+    c.strokeStyle = '#2f6fde'; c.lineWidth = 2 / scale; c.setLineDash([5 / scale, 4 / scale]);
+    for (const id of [drawing.from, drawing.to]) {
+      const t = id && items.find((x) => x.id === id);
+      if (t) { const [x1, y1, x2, y2] = itemBox(t); c.strokeRect(x1 - 6, y1 - 6, x2 - x1 + 12, y2 - y1 + 12); }
+    }
+    c.restore();
+    drawItem(c, resolveLinks([...items, drawing]).pop());
+  } else if (drawing) drawItem(c, drawing);
   paintSelection(c);
 }
 
 function render() { paint(ctx, scale * (window.devicePixelRatio || 1)); }
+
+// ---------------------------------------------------------------- the agent's marks pop in
+// New items from the agent spring up from their center, one after another (a damped spring that
+// overshoots a little), so its answer is easy to spot. Screen only; snapshots draw them as they are.
+const pops = new Map();   // item id -> when its animation starts (performance.now ms)
+const POP_MS = 650, POP_STAGGER_MS = 70;
+let knownIds = null, popFrame = null;
+
+function notePops(items) {
+  const ids = new Set(items.map((it) => it.id));
+  if (knownIds && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    let n = 0;
+    const now = performance.now();
+    for (const it of items) if (it.author === 'claude' && !knownIds.has(it.id)) pops.set(it.id, now + POP_STAGGER_MS * n++);
+    if (pops.size && !popFrame) {
+      const step = () => { render(); popFrame = pops.size ? requestAnimationFrame(step) : null; };
+      popFrame = requestAnimationFrame(step);
+    }
+  }
+  knownIds = ids;
+}
+
+function drawPopping(c, it, now) {
+  const start = pops.get(it.id);
+  if (start === undefined) return drawItem(c, it);
+  const t = (now - start) / POP_MS;
+  if (t < 0) return;  // waiting for its turn
+  if (t >= 1) { pops.delete(it.id); return drawItem(c, it); }
+  const k = 1 - 0.65 * Math.exp(-6 * t) * Math.cos(11 * t);
+  const [x1, y1, x2, y2] = itemBox(it);
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  c.save();
+  c.globalAlpha = Math.min(1, t * 5);
+  c.translate(cx, cy); c.scale(k, k); c.translate(-cx, -cy);
+  drawItem(c, it);
+  c.restore();
+}
 
 function snapshot() {
   const off = document.createElement('canvas');
@@ -725,6 +831,7 @@ async function post(route, body) {
 function applyState(next) {
   const changed = next.version !== state.version;
   state = next;
+  notePops(state.items);
   if (next.canvas && (next.canvas.width !== canvasSize.width || next.canvas.height !== canvasSize.height)) {
     canvasSize = next.canvas; fit(); showSize();
   }
@@ -813,11 +920,18 @@ function transformItem(it, f, { flipX = false, flipY = false, rot = 0, k = 1 } =
   return out;
 }
 
-const patchOf = (it) => Object.fromEntries([['id', it.id], ...GEOMETRY.filter((k) => k in it).map((k) => [k, it[k]])]);
+const patchOf = (it) => Object.fromEntries([['id', it.id], ...[...GEOMETRY, 'from', 'to'].filter((k) => k in it).map((k) => [k, it[k]])]);
 
 // Store transformed items: show them right away, then send one update (one undo step).
 async function commitItems(items, extra = {}) {
   if (!items.length) return;
+  // An arrow moved without the shape it was connected to lets go of that shape.
+  const moving = new Set(items.map((it) => it.id));
+  items = items.map((it) => {
+    const out = { ...it };
+    for (const end of ['from', 'to']) if (it[end] && !moving.has(it[end])) out[end] = null;
+    return out;
+  });
   for (const it of items) {
     const i = state.items.findIndex((x) => x.id === it.id);
     if (i >= 0) state.items[i] = it;
@@ -857,7 +971,8 @@ const shapeOf = ({ id, author, ...shape }) => shape;
 // Add shapes on their own layers (or the active one) and select what was added.
 async function addAndSelect(shapes) {
   if (!shapes.length) return;
-  const r = await post('/api/ops', { author: 'user', add: shapes.map((s) => ({ ...s, layer: s.layer || activeLayer })) });
+  // Copies don't keep the links of the arrows they were copied from.
+  const r = await post('/api/ops', { author: 'user', add: shapes.map(({ from, to, ...s }) => ({ ...s, layer: s.layer || activeLayer })) });
   if (r.ids) { setTool('select'); setSelection(r.ids); }
 }
 
@@ -1174,6 +1289,8 @@ paper.addEventListener('pointerdown', (e) => {
   if (tool === 'select' || tool === 'lasso') { selectDown(p, e); render(); return; }
   if (SHAPE_TOOLS.has(tool)) {
     drawing = { ...shapeFrom(tool, p, p), start: p, color, width: lineWidth, author: 'user', id: 'live' };
+    // An arrow started on a shape is connected to it.
+    if (tool === 'arrow') { const t = connectTarget(p); if (t) drawing.from = t.id; }
   }
   else drawing = { type: 'stroke', points: [p], color, width: lineWidth, author: 'user', id: 'live' };
   render();
@@ -1190,7 +1307,12 @@ paper.addEventListener('pointermove', (e) => {
   if (drag) { selectMove(toLogical(e), e); return; }
   if (!drawing) return;
   if (drawing.start) {
-    drawing = { ...drawing, ...shapeFrom(drawing.type, drawing.start, toLogical(e)) };
+    const p = toLogical(e);
+    drawing = { ...drawing, ...shapeFrom(drawing.type, drawing.start, p) };
+    if (drawing.type === 'arrow') {
+      const t = connectTarget(p);
+      drawing.to = t && t.id !== drawing.from ? t.id : undefined;
+    }
     render();
     return;
   }
@@ -1215,6 +1337,8 @@ async function endPointer() {
   if (!drawing) return;
   const { author: _a, id: _i, start, ...shape } = drawing;
   drawing = null;
+  if (!shape.from) delete shape.from;
+  if (!shape.to) delete shape.to;
   if (start) {
     const [x1, y1, x2, y2] = itemBox(shape);
     if (Math.max(x2 - x1, y2 - y1) < 4) { render(); return; }  // a click, not a drag
@@ -1236,14 +1360,17 @@ function growTextInput() {
   textInput.style.height = `${textInput.scrollHeight}px`;
 }
 
-function openTextInput(p) {
+// `edit` reopens an existing item's text (a text item, or a shape's label) instead of adding one.
+let editingId = null;
+function openTextInput(p, edit = null) {
   textAt = p;
-  textSizeAt = textSize();
-  textInput.value = '';
+  editingId = edit ? edit.id : null;
+  textSizeAt = edit ? edit.size : textSize();
+  textInput.value = edit ? edit.text : '';
   textInput.style.left = `${p[0] * scale}px`;
   textInput.style.top = `${(p[1] - textSizeAt) * scale}px`;
   textInput.style.fontSize = `${textSizeAt * scale}px`;
-  textInput.style.color = color;
+  textInput.style.color = edit ? edit.color : color;
   textInput.style.display = 'block';
   growTextInput();
   setTimeout(() => textInput.focus(), 0);
@@ -1252,13 +1379,44 @@ function commitText() {
   if (!textAt) return;
   const text = textInput.value.replace(/\s+$/, '');
   textInput.style.display = 'none';
-  if (text.trim()) addItems([{ type: 'text', x: textAt[0], y: textAt[1], text, color, size: textSizeAt }]);
-  textAt = null;
+  const id = editingId, at = textAt;
+  textAt = null; editingId = null;
+  if (id) {
+    const it = state.items.find((x) => x.id === id);
+    if (!it || (it.text || '') === text) return;
+    // Emptying a text item deletes it; emptying a shape's label just removes the label.
+    if (it.type === 'text' && !text.trim()) post('/api/ops', { author: 'user', remove: [id] });
+    else post('/api/ops', { author: 'user', update: [{ id, text }] });
+    return;
+  }
+  if (text.trim()) addItems([{ type: 'text', x: at[0], y: at[1], text, color, size: textSizeAt }]);
 }
+
+// Edit the text of an item in place: a text item at its own position, a shape's label at its center.
+const EDITABLE = new Set(['text', 'rect', 'ellipse', 'polygon', 'arrow', 'line']);
+function editItemText(it) {
+  if (!it || !EDITABLE.has(it.type)) return false;
+  setSelection([]);
+  const ink = it.color || (it.author === 'claude' ? CLAUDE_COLOR : '#1f2328');
+  if (it.type === 'text') {
+    openTextInput([it.x, it.y], { id: it.id, text: it.text || '', size: it.size || 24, color: ink });
+  } else {
+    const [x1, y1, x2, y2] = itemBox(it);
+    const size = it.size || (it.points ? 16 : 20);
+    openTextInput([x1 + (x2 - x1) / 2 - 60, y1 + (y2 - y1) / 2 + size / 2], { id: it.id, text: it.text || '', size, color: ink });
+  }
+  return true;
+}
+paper.addEventListener('dblclick', (e) => {
+  if (tool !== 'select' && tool !== 'lasso') return;
+  const p = toLogical(e);
+  const hit = [...pickable()].reverse().find((it) => EDITABLE.has(it.type) && hits(it, p));
+  if (hit) { e.preventDefault(); editItemText(hit); }
+});
 textInput.addEventListener('input', growTextInput);
 textInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); commitText(); }
-  if (e.key === 'Escape') { textAt = null; textInput.style.display = 'none'; }
+  if (e.key === 'Escape') { textAt = null; editingId = null; textInput.style.display = 'none'; }
 });
 // Clicking anywhere else places the text, except the size slider, which resizes it in place.
 textInput.addEventListener('blur', (e) => { if (e.relatedTarget !== $('width')) commitText(); });
@@ -1309,7 +1467,7 @@ let chatShown = '';  // signature of what's on screen, so the list only redraws 
 let chatSeen = new Set();  // message times already shown, so only new ones animate in
 function renderChat() {
   const chat = state.chat || [];
-  const sig = chat.map((m) => `${m.at}${m.img ? 'i' : ''}`).join(',');
+  const sig = chat.map((m) => `${m.at}${m.img ? 'i' : ''}`).join(',') + `|${state.thinking ? state.thinking.phase : ''}`;
   if (sig === chatShown) return;
   chatShown = sig;
   const box = $('chat');
@@ -1336,9 +1494,29 @@ function renderChat() {
     el.appendChild(del);
     box.appendChild(el);
   }
+  if (state.thinking) box.appendChild(thinkingBubble(state.thinking));
   chatSeen = new Set(chat.map((m) => m.at));
   box.scrollTop = box.scrollHeight;
 }
+
+// The agent has the last send: "Looking at your sketch · 12s" with bouncing dots, or, when nobody
+// was listening, a still gray bubble saying it is saved.
+function thinkingBubble(t) {
+  const el = document.createElement('div');
+  el.className = 'msg agent typing' + (t.phase === 'queued' ? ' queued' : '');
+  el.setAttribute('role', 'status');
+  el.dataset.since = t.at;
+  el.innerHTML = '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="label"></span>';
+  updateThinking(el);
+  return el;
+}
+function updateThinking(el) {
+  const secs = Math.max(0, Math.round((Date.now() - Number(el.dataset.since)) / 1000));
+  const label = el.classList.contains('queued') ? 'Saved. The agent will see it when it listens'
+    : `Looking at your sketch${secs >= 3 ? ` · ${secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`}` : ''}`;
+  el.querySelector('.label').textContent = label;
+}
+setInterval(() => { const el = document.querySelector('.msg.typing'); if (el) updateThinking(el); }, 1000);
 
 // Chat panel width and collapsed state are remembered per browser.
 const store = {
@@ -1646,6 +1824,8 @@ async function send(answer) {
     const screen = OVERLAY && native ? await captureScreen() : false;
     const r = await post('/api/send', { png: snapshot(), note, screen });
     $('note').value = '';
+    btn.classList.remove('flying'); void btn.offsetWidth; btn.classList.add('flying');
+    setTimeout(() => btn.classList.remove('flying'), 800);
     toast(OVERLAY && native && !screen ? "Sent without the screen. Turn on Screen Recording for doodle-prompt, then reopen the overlay"
       : r.delivered ? 'Sent' : 'Saved. The agent will see it next time it listens');
   } catch {
@@ -1727,6 +1907,7 @@ document.addEventListener('keydown', (e) => {
   if (mod && key === 'd' && selection.size) { e.preventDefault(); duplicateSelection(); return; }
   if (mod || e.altKey) return;
   if ((e.key === 'Delete' || e.key === 'Backspace') && selection.size) { e.preventDefault(); deleteSelection(); return; }
+  if (e.key === 'Enter' && selection.size === 1 && editItemText(selectedItems()[0])) { e.preventDefault(); return; }
   if (e.key === 'Escape' && selection.size) { setSelection([]); return; }
   if (e.key === 'Escape' && OVERLAY) { setDrawMode(false); return; }
   const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
@@ -1889,7 +2070,33 @@ $('fab').addEventListener('pointerup', () => {
 });
 $('fab').addEventListener('lostpointercapture', () => { if (native) native.post({ type: 'follow', on: false }); });
 
+// Capture the screen (without this window) onto the canvas, on a bottom layer named "Capture", so the
+// user and the agent can draw on top of it. In the overlay it covers the page exactly, freezing
+// what was on screen; in a window it is scaled to fit the page.
+const CAPTURE_LAYER = 'Capture';
+async function captureToCanvas() {
+  const { src, permitted } = await native.capture({ jpeg: true }).catch(() => ({ src: null, permitted: true }));
+  if (!permitted) { toast('Turn on Screen Recording for doodle-prompt, then try again'); if (OVERLAY) setTimeout(() => setFolded(true), 1200); return; }
+  if (!src) { toast("Couldn't capture the screen"); return; }
+  const img = new Image();
+  img.src = src;
+  try { await img.decode(); } catch { toast("Couldn't capture the screen"); return; }
+  const k = Math.min(canvasSize.width / img.naturalWidth, canvasSize.height / img.naturalHeight);
+  const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+  let layer = (state.layers || []).find((l) => l.name === CAPTURE_LAYER);
+  if (!layer) {
+    const r = await post('/api/ops', { author: 'user', addLayer: CAPTURE_LAYER });
+    layer = { id: r.layer };
+  }
+  await post('/api/ops', {
+    author: 'user', moveLayer: { id: layer.id, index: 0 },
+    add: [{ type: 'image', src, x: Math.round((canvasSize.width - w) / 2), y: Math.round((canvasSize.height - h) / 2), w, h, layer: layer.id }],
+  });
+  toast('Captured. Draw on top of it');
+}
+
 if (native) {
+  $('captureBtn').addEventListener('click', captureToCanvas);
   $('toOverlay').addEventListener('click', () => native.post({ type: 'switch', to: 'overlay' }));
   $('toWindow').addEventListener('click', () => native.post({ type: 'switch', to: 'window' }));
 }

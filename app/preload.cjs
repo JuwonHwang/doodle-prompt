@@ -3,5 +3,5 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('doodleNative', {
   post: (msg) => ipcRenderer.send('doodle', msg),
-  capture: () => ipcRenderer.invoke('doodle-capture'),
+  capture: (opts) => ipcRenderer.invoke('doodle-capture', opts),
 });

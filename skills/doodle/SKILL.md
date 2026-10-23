@@ -67,7 +67,7 @@ Shapes (all coordinates in canvas space):
 | type | fields |
 |---|---|
 | `rect`, `ellipse` | `x`, `y`, `w`, `h`, optional `text` (centered, wraps) |
-| `line`, `arrow` | `points: [[x,y], ...]` (two or more), optional `text` (label at the middle) |
+| `line`, `arrow` | `points: [[x,y], ...]` (two or more), optional `text` (label at the middle), optional `from`/`to`: the id of a `rect`, `ellipse`, `text`, `image` or `polygon` (or `"#n"` for the n-th shape added in the same `draw`). A connected end sits on that shape's edge and follows it when the shape moves; `points` then only matter for ends that aren't connected. Connect arrows in flows, pipelines and architectures so the user can rearrange the boxes. `state` shows links as `(c1 → c2)`. |
 | `text` | `x`, `y` (baseline), `text`, optional `size` (default 24) |
 | `polygon` | `points` (closed automatically), optional `fill`, `text`: roofs, arrows-as-shapes, any filled outline |
 | `stroke` | `points` freehand, for when you want a loose doodle |
@@ -86,7 +86,7 @@ Other commands:
 
 ## Layers
 
-The canvas has layers (bottom to top), listed in the `wait`/`state` output with each item's layer (`@L2`). The user can reorder, hide, rename, add and delete them; hiding only affects their screen, you always see everything. Items of type `image` are pictures the user pasted (screenshots and the like) or paint-bucket fills (marked `(bucket fill)`); look at them in the PNG. Use layers when they help: an alternative on its own layer the user can toggle, annotations kept apart from the drawing. Name them in the user's language. Don't create layers for single marks.
+The canvas has layers (bottom to top), listed in the `wait`/`state` output with each item's layer (`@L2`). The user can reorder, hide, rename, add and delete them; hiding only affects their screen, you always see everything. Items of type `image` are pictures the user pasted (screenshots and the like), screen captures from the toolbar's capture button (on a bottom layer named "Capture"; the user draws on top of them to point at things on screen), or paint-bucket fills (marked `(bucket fill)`); look at them in the PNG. The user can double-click any text or shape label to edit it, so labels you draw may come back changed. Use layers when they help: an alternative on its own layer the user can toggle, annotations kept apart from the drawing. Name them in the user's language. Don't create layers for single marks.
 
 ## Style
 

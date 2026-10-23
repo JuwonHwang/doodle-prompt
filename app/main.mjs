@@ -28,7 +28,15 @@ function parseArgs(argv) {
     const hit = argv.find((a) => a.startsWith(`--${name}=`));
     return hit ? hit.slice(name.length + 3) : null;
   };
-  return { url: get('doodle-url'), mode: get('doodle-mode') };
+  return { url: get('doodle-url'), mode: get('doodle-mode'), log: get('doodle-log') };
+}
+
+// What the app did, appended to .doodle/app.log (the CLI passes --doodle-log) so a session can be
+// checked afterwards: mode changes, click-through switches, screen moves, captures.
+let logFile = null;
+function log(...parts) {
+  if (!logFile) return;
+  try { fs.appendFileSync(logFile, `${new Date().toISOString()} ${parts.join(' ')}\n`); } catch {}
 }
 
 const sameRect = (a, b) => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
@@ -80,7 +88,10 @@ function updateMouse(w) {
   // The overlay covers one screen; while the floating icon is dragged it moves to the mouse's screen.
   if (follow) {
     const d = screen.getDisplayNearestPoint(p);
-    if (!sameRect(d.bounds, w.getBounds())) w.setBounds(d.bounds);
+    if (!sameRect(d.bounds, w.getBounds())) {
+      w.setBounds(d.bounds);
+      log('overlay moved to display', d.id, JSON.stringify(d.bounds));
+    }
   }
   let ignore = false;
   if (!drawMode) {
@@ -90,6 +101,7 @@ function updateMouse(w) {
   if (ignore !== ignoring) {
     ignoring = ignore;
     w.setIgnoreMouseEvents(ignore, { forward: true });
+    log(ignore ? 'mouse passes through' : 'mouse taken', `at ${p.x},${p.y}`);
   }
 }
 
@@ -103,7 +115,8 @@ function show(url, mode) {
   }
   const old = win;
   current = { url, mode };
-  try { fs.writeFileSync(LAST_FILE(), JSON.stringify({ url })); } catch {}
+  log('show', mode, url);
+  try { fs.writeFileSync(LAST_FILE(), JSON.stringify({ url, mode, log: logFile })); } catch {}
   win = mode === 'overlay' ? overlayWindow(url) : canvasWindow(url);
   win.once('ready-to-show', () => {
     win.show(); win.focus();
@@ -111,12 +124,14 @@ function show(url, mode) {
   });
 }
 
-// Opened from the Dock or Start menu: reconnect to the last canvas if its server is still up.
+// Opened without arguments (from the Dock or Start menu, or relaunched by macOS after a permission
+// change): reconnect to the last canvas, in the last mode, if its server is still up.
 async function showLast() {
-  let url = null;
-  try { url = JSON.parse(fs.readFileSync(LAST_FILE(), 'utf8')).url; } catch {}
-  if (url) {
-    try { await fetch(new URL('/api/state', url)); return show(url, 'window'); } catch {}
+  let last = {};
+  try { last = JSON.parse(fs.readFileSync(LAST_FILE(), 'utf8')); } catch {}
+  if (last.url) {
+    if (last.log && !logFile) logFile = last.log;
+    try { await fetch(new URL('/api/state', last.url)); return show(last.url, last.mode); } catch {}
   }
   const w = new BrowserWindow({ width: 460, height: 260, title: 'doodle-prompt', icon: ICON, autoHideMenuBar: true, resizable: false });
   w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><meta charset="utf-8">
@@ -127,24 +142,35 @@ async function showLast() {
   win = w;
 }
 
-async function capture() {
+// Screenshot of the screen the window is on, without the window itself. `jpeg` keeps captures that
+// are stored on the canvas small; the overlay's background for a send stays PNG.
+async function capture({ jpeg = false } = {}) {
   if (!win || win.isDestroyed()) return { src: null, permitted: true };
   const denied = () => process.platform === 'darwin' && systemPreferences.getMediaAccessStatus('screen') === 'denied';
   if (denied()) {
+    log('capture skipped: Screen Recording denied; opened settings');
     shell.openExternal(SCREEN_PANE);
     return { src: null, permitted: false };
   }
-  const b = win.getBounds();
-  const display = screen.getDisplayMatching(b);
-  // Hide the overlay for the moment of the capture so the screenshot shows only what is under it.
+  const started = Date.now();
+  const display = screen.getDisplayMatching(win.getBounds());
+  const { width, height } = display.bounds;
+  // Hide the window for the moment of the capture so the screenshot shows only what is under it.
   win.setOpacity(0);
   await new Promise((r) => setTimeout(r, 80));
   try {
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: b.width, height: b.height } });
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width, height } });
     const source = sources.find((s) => s.display_id === String(display.id)) || sources[0];
-    if (!source || source.thumbnail.isEmpty()) return { src: null, permitted: !denied() };
-    return { src: source.thumbnail.toDataURL(), permitted: true };
-  } catch {
+    if (!source || source.thumbnail.isEmpty()) {
+      log('capture empty', `sources=${sources.length}`);
+      return { src: null, permitted: !denied() };
+    }
+    const size = source.thumbnail.getSize();
+    log('capture ok', `${size.width}x${size.height}`, `display=${source.display_id}`, `${Date.now() - started}ms`);
+    const src = jpeg ? `data:image/jpeg;base64,${source.thumbnail.toJPEG(85).toString('base64')}` : source.thumbnail.toDataURL();
+    return { src, permitted: true };
+  } catch (err) {
+    log('capture failed', err.message);
     if (denied()) shell.openExternal(SCREEN_PANE);
     return { src: null, permitted: !denied() };
   } finally {
@@ -157,6 +183,7 @@ ipcMain.on('doodle', (e, msg) => {
   switch (msg.type) {
     case 'mode':
       drawMode = msg.draw !== false;
+      log(drawMode ? 'draw mode' : 'click-through mode');
       if (drawMode) win.focus();
       updateMouse(win);
       break;
@@ -166,6 +193,7 @@ ipcMain.on('doodle', (e, msg) => {
       break;
     case 'follow':
       follow = Boolean(msg.on);
+      log(follow ? 'icon drag started' : 'icon drag ended');
       break;
     case 'switch':
       if (current.url) show(current.url, msg.to === 'overlay' ? 'overlay' : 'window');
@@ -175,19 +203,21 @@ ipcMain.on('doodle', (e, msg) => {
       break;
   }
 });
-ipcMain.handle('doodle-capture', (e) => (win && e.sender === win.webContents ? capture() : { src: null, permitted: true }));
+ipcMain.handle('doodle-capture', (e, opts) => (win && e.sender === win.webContents ? capture(opts || {}) : { src: null, permitted: true }));
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', (_e, argv) => {
-    const { url, mode } = parseArgs(argv);
+    const { url, mode, log: file } = parseArgs(argv);
+    if (file) logFile = file;
     if (url) show(url, mode);
     else if (win && !win.isDestroyed()) { win.show(); win.focus(); }
   });
   app.whenReady().then(() => {
     if (process.platform === 'darwin') app.dock?.setIcon(ICON);
-    const { url, mode } = parseArgs(process.argv);
+    const { url, mode, log: file } = parseArgs(process.argv);
+    if (file) logFile = file;
     if (url) show(url, mode); else showLast();
   });
   app.on('window-all-closed', () => app.quit());
