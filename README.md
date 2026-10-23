@@ -42,6 +42,8 @@ If you would reach for a whiteboard to explain it to a colleague, draw it here i
 
 **Overlay mode** turns your whole screen into the canvas. Circle the spike in your loss curve. Point at the column in a notebook output that looks wrong. Sketch the missing step right on top of your pipeline diagram, or the missing button on top of your app. When you send, Claude sees your strokes **and** the screen underneath them.
 
+<img src="docs/demo-overlay.gif" width="860" alt="In overlay mode, a cut-off page title is circled on screen; Claude points at the cause and proposes a fix, the fix lands, and the overlay folds into a floating icon">
+
 - **Click-through** — press `Esc` and your marks stay on screen while your clicks go to the app below.
 - **Fold it away** — collapse the overlay into a floating icon. Drag it anywhere, even to your other monitor, and the overlay follows.
 - **Window mode** — prefer a plain canvas next to your terminal? One click switches back.
@@ -106,7 +108,7 @@ npx github:JuwonHwang/doodle-prompt draw -  # draw shapes from JSON on stdin
 <details>
 <summary><b>Run from source</b></summary>
 
-`npm install`, and the plugin's `start` uses the local Electron automatically. `node scripts/demo.mjs` re-records the intro video into `docs/` (needs Node 22+, Google Chrome and ffmpeg). `npm run dist` builds the installers into `dist/`. `DOODLE_APP` points `start` at another build of the app.
+`npm install`, and the plugin's `start` uses the local Electron automatically. `node scripts/demo.mjs` and `node scripts/demo-overlay.mjs` re-record the demo videos into `docs/` (needs Node 22+, Google Chrome and ffmpeg). `npm run dist` builds the installers into `dist/`. `DOODLE_APP` points `start` at another build of the app.
 
 ```
 src/doodle.mjs                    canvas server + CLI, launches the app

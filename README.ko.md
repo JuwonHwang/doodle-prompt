@@ -42,6 +42,8 @@ Claude:  … → [조인] → [투 타워 모델] → [랭킹 손실]   ✓ 구�
 
 **오버레이 모드**는 화면 전체를 캔버스로 만들어요. 손실 곡선에서 튀는 구간에 동그라미를 치고, 노트북 출력에서 이상한 열을 가리키고, 파이프라인 다이어그램이나 실행 중인 앱 위에 빠진 단계를 바로 그려 보세요. 보내면 Claude는 그린 선과 **그 아래 화면**을 함께 봐요.
 
+<img src="docs/demo-overlay.gif" width="860" alt="오버레이 모드에서 잘린 페이지 제목에 동그라미를 치자, Claude가 원인을 가리키며 수정안을 제안하고, 수정이 반영된 뒤 오버레이가 떠 있는 아이콘으로 접히는 장면">
+
 - **클릭 통과**: `Esc`를 누르면 그린 건 화면에 남고 클릭은 아래 앱으로 가요.
 - **접어 두기**: 오버레이를 떠 있는 아이콘 하나로 접을 수 있어요. 아이콘을 어디로든, 다른 모니터로도 끌어 옮기면 오버레이가 따라가요.
 - **창 모드**: 터미널 옆 일반 캔버스 창이 편하다면 버튼 하나로 바꿀 수 있어요.
@@ -106,7 +108,7 @@ npx github:JuwonHwang/doodle-prompt draw -  # 표준 입력으로 받은 JSON �
 <details>
 <summary><b>소스에서 실행</b></summary>
 
-`npm install`을 실행하면 플러그인의 `start`가 로컬 Electron으로 앱을 열어요. `node scripts/demo.mjs`는 소개 영상을 `docs/`에 다시 녹화해요(Node 22 이상, Google Chrome, ffmpeg 필요). `npm run dist`는 설치 파일을 `dist/`에 만들어요. 다른 앱 빌드를 쓰려면 `DOODLE_APP`에 경로를 지정하세요.
+`npm install`을 실행하면 플러그인의 `start`가 로컬 Electron으로 앱을 열어요. `node scripts/demo.mjs`와 `node scripts/demo-overlay.mjs`는 데모 영상을 `docs/`에 다시 녹화해요(Node 22 이상, Google Chrome, ffmpeg 필요). `npm run dist`는 설치 파일을 `dist/`에 만들어요. 다른 앱 빌드를 쓰려면 `DOODLE_APP`에 경로를 지정하세요.
 
 ```
 src/doodle.mjs                    캔버스 서버 + CLI, 앱 실행
