@@ -9,11 +9,19 @@
   },
   "homepage": "https://github.com/JuwonHwang/doodle-prompt#readme",
   "type": "module",
+  "main": "app/main.mjs",
   "bin": {
     "doodle-prompt": "src/doodle.mjs"
   },
+  "scripts": {
+    "app": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
   "files": [
     "src/",
+    "app/",
     "README.ko.md"
   ],
   "engines": {
@@ -28,5 +36,65 @@
     "claude-code",
     "agent"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "io.github.juwonhwang.doodle-prompt",
+    "productName": "doodle-prompt",
+    "files": [
+      "app/**",
+      "src/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "src/icon-512.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "doodle-prompt sends a screenshot of the screen under your overlay drawing to your coding agent."
+      }
+    },
+    "win": {
+      "icon": "src/icon-512.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "JuwonHwang",
+      "repo": "doodle-prompt"
+    }
+  }
 }

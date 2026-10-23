@@ -187,8 +187,10 @@
   /* Listening: mint headphones. Busy: hourglass. The words are in the tooltip. */
   #status { color: var(--muted); }
   #status .ic { width: 17px; height: 17px; }
-  #status.on { color: #141414; background: var(--mint); animation: pulse 1.8s ease-in-out infinite; }
-  @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(61,220,151,.28); } }
+  /* The offset shadow stays put; only a mint ring grows and fades around it. */
+  #status.on { color: #141414; background: var(--mint); animation: pulse 1.8s ease-in-out infinite;
+    box-shadow: 2px 2px 0 var(--drop), 0 0 0 0 rgba(61,220,151,.45); }
+  @keyframes pulse { 70%, 100% { box-shadow: 2px 2px 0 var(--drop), 0 0 0 7px rgba(61,220,151,0); } }
   @media (prefers-reduced-motion: reduce) { #status.on { animation: none; } }
   #status .on-icon, #status.on .off-icon { display: none; }
   #status.on .on-icon { display: inline; }
@@ -250,7 +252,40 @@
   #confirmBox form { display: flex; justify-content: flex-end; gap: 10px; }
   #confirmBox button[value="ok"] { background: var(--coral); color: #141414; }
   @media (max-width: 720px) { .sep { display: none; } }
+
+  /* ---------- overlay: a transparent sheet over the whole screen (desktop app, `start --overlay`).
+     The page is the screen; the toolbar and chat float over it. */
+  .overlay-only { display: none !important; }
+  html.overlay .overlay-only { display: flex !important; }
+  /* Shown in the desktop app's normal window: the button that turns it into the overlay. */
+  .window-only { display: none !important; }
+  html.app:not(.overlay) .window-only { display: flex !important; }
+  html.overlay, html.overlay body { background: transparent; }
+  html.overlay #stageBox { position: fixed; inset: 0; }
+  html.overlay #stage { overflow: hidden; }
+  html.overlay #wrap { margin: 0; padding: 0; }
+  html.overlay #paper { background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+  /* A marker-yellow frame while the overlay takes the mouse. */
+  html.overlay.drawing #stageBox::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+    box-shadow: inset 0 0 0 4px var(--marker); }
+  /* Centered with margins, not a transform, so the open/fold animations can move it freely. */
+  html.overlay #bar { position: fixed; left: 0; right: 0; bottom: 16px; width: max-content; margin: 0 auto; z-index: 3; flex-wrap: nowrap;
+    max-width: calc(100vw - 32px); min-height: 0; border: var(--b) solid var(--edge); border-radius: 14px; box-shadow: 4px 4px 0 var(--drop); }
+  html.overlay #side { position: fixed; right: 16px; top: 44px; bottom: 100px; z-index: 3; overflow: hidden;
+    border: var(--b) solid var(--edge); border-radius: 14px; box-shadow: 4px 4px 0 var(--drop); }
+  html.overlay #side.collapsed { bottom: auto; }
+  html.overlay #layers { top: 44px; right: calc(var(--side-w, 310px) + 32px); }
+  html.overlay #toast { bottom: 100px; }
+  html.overlay #view, html.overlay #hint, html.overlay #sideGrip { display: none; }
+  /* Folded: everything hides behind one floating icon that can be dragged anywhere. */
+  #fab { display: none; position: fixed; z-index: 5; width: 56px; height: 56px; padding: 6px; border-radius: 16px;
+    background: var(--chrome); border: var(--b) solid var(--edge); box-shadow: 4px 4px 0 var(--drop); cursor: grab; touch-action: none; }
+  #fab img { width: 100%; height: 100%; pointer-events: none; }
+  #fab.dragging { cursor: grabbing; }
+  html.overlay.folded #fab { display: block; }
+  html.overlay.folded #stageBox, html.overlay.folded #bar, html.overlay.folded #side { display: none; }
 </style>
+<script>if (new URLSearchParams(location.search).has('overlay')) document.documentElement.classList.add('overlay', 'drawing');</script>
 </head>
 <body>
 <svg style="display:none" aria-hidden="true">
@@ -280,7 +315,10 @@
   <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
   <symbol id="i-agent" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
   <symbol id="i-listening" viewBox="0 0 24 24"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></symbol>
-  <symbol id="i-busy" viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></symbol>
+  <symbol id="i-overlay" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 7-6"/></symbol>
+  <symbol id="i-window" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/><path d="M6 4v5"/><path d="M10 4v5"/></symbol>
+  <symbol id="i-click" viewBox="0 0 24 24"><path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.04 9.69a.5.5 0 0 1 .65-.65l11 4.5a.5.5 0 0 1-.07.95l-4.35 1.04a1 1 0 0 0-.74.74l-1.04 4.35a.5.5 0 0 1-.95.07z"/></symbol>
+  <symbol id="i-busy"viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></symbol>
 </svg>
 <div id="main">
 <div id="left">
@@ -347,6 +385,17 @@
   <div class="group" role="group" aria-label="Layers">
     <button id="layersBtn" aria-pressed="false" title="Layers (L)" aria-label="Layers"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></button>
   </div>
+  <div class="sep window-only"></div>
+  <div class="group window-only" role="group" aria-label="Overlay">
+    <button id="toOverlay" title="Draw over the whole screen" aria-label="Draw over the whole screen"><svg class="ic" aria-hidden="true"><use href="#i-overlay"/></svg></button>
+  </div>
+  <div class="sep overlay-only"></div>
+  <div class="group overlay-only" role="group" aria-label="Overlay">
+    <button id="modeBtn" aria-pressed="false" title="Click through to the apps underneath (Esc)" aria-label="Click through"><svg class="ic" aria-hidden="true"><use href="#i-click"/></svg></button>
+    <button id="toWindow" title="Back to the canvas window" aria-label="Back to the canvas window"><svg class="ic" aria-hidden="true"><use href="#i-window"/></svg></button>
+    <button id="foldOverlay" title="Fold into a floating icon" aria-label="Fold the overlay"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg></button>
+    <button id="closeOverlay" title="Close the overlay" aria-label="Close the overlay"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
 </div>
 </div>
 <aside id="side" aria-label="Chat with the agent">
@@ -363,7 +412,8 @@
   </div>
 </aside>
 </div>
-<dialog id="viewer" aria-label="Sent sketch"><form method="dialog"><button aria-label="Close"><img id="viewerImg" alt="Sent sketch"></button></form></dialog>
+<button id="fab" title="Open the overlay (drag to move)" aria-label="Open the overlay"><img src="/icon.svg" alt=""></button>
+<dialog id="viewer"aria-label="Sent sketch"><form method="dialog"><button aria-label="Close"><img id="viewerImg" alt="Sent sketch"></button></form></dialog>
 <dialog id="confirmBox">
   <h2>doodle-prompt</h2>
   <p id="confirmText"></p>
@@ -376,6 +426,12 @@ const CLAUDE_COLOR = '#6c4cf5';  // the agent's ink, so its marks stand apart fr
 const paper = document.getElementById('paper');
 const ctx = paper.getContext('2d');
 const $ = (id) => document.getElementById(id);
+// Opened as the desktop app's overlay: the page covers the screen and the app relays the mouse.
+const OVERLAY = document.documentElement.classList.contains('overlay');
+const native = window.doodleNative || null;  // the desktop app (app/preload.cjs)
+if (native) document.documentElement.classList.add('app');
+let drawMode = true;   // overlay: the overlay takes the mouse (false: clicks go to the apps underneath)
+let overlayBg = null;  // overlay: the screen at the last send, drawn under the strokes for the agent
 
 let canvasSize = { width: 1200, height: 800 };
 let state = { version: 0, items: [], say: null, waiting: false };
@@ -405,7 +461,7 @@ const maxScale = () => 16384 / (Math.max(canvasSize.width, canvasSize.height) * 
 function fit() {
   const box = $('stageBox');
   if (!box.clientWidth || !box.clientHeight) return;
-  scale = Math.max(0.05, Math.min(maxScale(), fitScale() * zoom));
+  scale = OVERLAY ? 1 : Math.max(0.05, Math.min(maxScale(), fitScale() * zoom));
   $('zoomLabel').textContent = `${Math.round(scale * 100)}%`;
   const dpr = window.devicePixelRatio || 1;
   paper.style.width = `${canvasSize.width * scale}px`;
@@ -623,10 +679,18 @@ function dotPattern(c) {
 
 function paint(c, k, forSnapshot = false) {
   c.setTransform(k, 0, 0, k, 0, 0);
-  c.fillStyle = '#ffffff';
-  c.fillRect(0, 0, canvasSize.width, canvasSize.height);
+  if (OVERLAY && !forSnapshot) {
+    // The screen shows through; a faint tint while the overlay takes the mouse.
+    c.clearRect(0, 0, canvasSize.width, canvasSize.height);
+    if (drawMode) { c.fillStyle = 'rgba(20,20,20,.04)'; c.fillRect(0, 0, canvasSize.width, canvasSize.height); }
+  } else if (forSnapshot && overlayBg) {
+    c.drawImage(overlayBg, 0, 0, canvasSize.width, canvasSize.height);
+  } else {
+    c.fillStyle = '#ffffff';
+    c.fillRect(0, 0, canvasSize.width, canvasSize.height);
+  }
   // Faint dot grid like a sketchbook page; on screen only, never in what the agent sees.
-  if (!forSnapshot) { c.fillStyle = dotPattern(c); c.fillRect(0, 0, canvasSize.width, canvasSize.height); }
+  if (!forSnapshot && !OVERLAY) { c.fillStyle = dotPattern(c); c.fillRect(0, 0, canvasSize.width, canvasSize.height); }
   const items = visibleItems(forSnapshot);
   for (const it of items) drawItem(c, it);
   if (forSnapshot) return;
@@ -664,6 +728,7 @@ function applyState(next) {
   if (next.canvas && (next.canvas.width !== canvasSize.width || next.canvas.height !== canvasSize.height)) {
     canvasSize = next.canvas; fit(); showSize();
   }
+  syncOverlaySize();
   pending = pending.filter((p) => p.version === null || p.version > state.version);
   if ([...selection].some((id) => !state.items.some((it) => it.id === id))) selection = new Set([...selection].filter((id) => state.items.some((it) => it.id === id)));
   renderChat();
@@ -1346,6 +1411,7 @@ showSize();
 
 // Zoom around a point on screen (the cursor, or the middle of the stage) so it stays put.
 function setZoom(z, at) {
+  if (OVERLAY) return;  // the overlay is the screen, at 100%
   const st = $('stage');
   const box = st.getBoundingClientRect();
   const ax = at ? at.x : box.left + box.width / 2, ay = at ? at.y : box.top + box.height / 2;
@@ -1577,9 +1643,11 @@ async function send(answer) {
   try {
     const typed = $('note').value.trim();
     const note = answer ? [answer, typed].filter(Boolean).join(' — ') : typed;
-    const r = await post('/api/send', { png: snapshot(), note });
+    const screen = OVERLAY && native ? await captureScreen() : false;
+    const r = await post('/api/send', { png: snapshot(), note, screen });
     $('note').value = '';
-    toast(r.delivered ? 'Sent' : 'Saved. The agent will see it next time it listens');
+    toast(OVERLAY && native && !screen ? "Sent without the screen. Turn on Screen Recording for doodle-prompt, then reopen the overlay"
+      : r.delivered ? 'Sent' : 'Saved. The agent will see it next time it listens');
   } catch {
     toast("Couldn't send. Is the canvas server still running?");
   } finally {
@@ -1660,6 +1728,7 @@ document.addEventListener('keydown', (e) => {
   if (mod || e.altKey) return;
   if ((e.key === 'Delete' || e.key === 'Backspace') && selection.size) { e.preventDefault(); deleteSelection(); return; }
   if (e.key === 'Escape' && selection.size) { setSelection([]); return; }
+  if (e.key === 'Escape' && OVERLAY) { setDrawMode(false); return; }
   const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
   if (arrows[e.key] && selection.size) {
     e.preventDefault();
@@ -1672,6 +1741,173 @@ document.addEventListener('keydown', (e) => {
   const tools = { f: 'fill', v: 'select', s: 'lasso', p: 'pen', e: 'eraser', t: 'text', r: 'rect', o: 'ellipse', a: 'arrow' };
   if (tools[e.key]) setTool(tools[e.key]);
 });
+
+// ---------------------------------------------------------------- overlay
+// Draw mode: the overlay takes every click. Click-through: only the toolbar, chat and other UI
+// keep the mouse (the page reports their boxes to the app); everything else reaches the apps below.
+
+function setDrawMode(on) {
+  drawMode = on;
+  document.documentElement.classList.toggle('drawing', on);
+  $('modeBtn').setAttribute('aria-pressed', String(!on));
+  $('modeBtn').title = on ? 'Click through to the apps underneath (Esc)' : 'Back to drawing';
+  if (native) native.post({ type: 'mode', draw: on });
+  render();
+}
+
+// The page is as big as the screen it covers, including after the window moves to another screen.
+let sizeAsked = '';
+function syncOverlaySize() {
+  if (!OVERLAY || !state.canvas) return;
+  const w = window.innerWidth, h = window.innerHeight;
+  const key = `${w}x${h}`;
+  if ((w === canvasSize.width && h === canvasSize.height) || key === sizeAsked) return;
+  sizeAsked = key;
+  post('/api/ops', { author: 'user', resize: { width: w, height: h } });
+}
+window.addEventListener('resize', syncOverlaySize);
+
+let lastRects = '';
+function reportRects() {
+  if (!native) return;
+  // An open dialog, or the icon being dragged, needs the whole screen to keep the mouse.
+  const els = document.querySelector('dialog[open]') || fabDrag ? [document.documentElement]
+    : [$('bar'), $('side'), $('layers'), $('selbar'), $('textInput'), $('fab')];
+  const rects = els.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height)
+    .map((r) => [r.left, r.top, r.width, r.height]);
+  const key = JSON.stringify(rects);
+  if (key !== lastRects) { lastRects = key; native.post({ type: 'rects', rects }); }
+}
+
+// Asks the app for a screenshot without the overlay; resolves true once it is loaded as overlayBg.
+async function captureScreen() {
+  const { src, permitted } = await native.capture().catch(() => ({ src: null, permitted: true }));
+  // Without the permission the app opens System Settings; fold so the overlay doesn't cover it.
+  if (!permitted) setTimeout(() => setFolded(true), 1200);
+  if (!src) return false;
+  const img = new Image();
+  img.src = src;
+  try { await img.decode(); overlayBg = img; return true; } catch { return false; }
+}
+
+// Folding hides the canvas, toolbar and chat behind the floating icon; clicks go to the apps below.
+// Both directions animate: the parts shrink into the icon and grow back out of it.
+const FAB_SIZE = 56;
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const ms = (n) => (reduceMotion.matches ? 0 : n);
+const foldParts = () => [$('stageBox'), $('bar'), $('side')];
+const SHOWN = { translate: '0px 0px', scale: '1', opacity: 1 };
+
+// Keyframe that puts an element at the icon, shrunk to about its size.
+function atFab(el) {
+  const r = el.getBoundingClientRect();
+  const fx = (parseFloat($('fab').style.left) || 0) + FAB_SIZE / 2, fy = (parseFloat($('fab').style.top) || 0) + FAB_SIZE / 2;
+  const k = Math.max(0.02, Math.min(FAB_SIZE / r.width, FAB_SIZE / r.height));
+  return { translate: `${fx - (r.left + r.width / 2)}px ${fy - (r.top + r.height / 2)}px`, scale: String(k), opacity: 0 };
+}
+
+let drawBeforeFold = true;
+let folding = false;
+async function setFolded(on) {
+  const root = document.documentElement;
+  if (folding || on === root.classList.contains('folded')) return;
+  folding = true;
+  if (on) {
+    drawBeforeFold = drawMode;
+    const anims = foldParts().map((el) => el.animate([SHOWN, atFab(el)], { duration: ms(280), easing: 'cubic-bezier(.55,0,.75,.2)', fill: 'forwards' }));
+    await Promise.all(anims.map((a) => a.finished));
+    root.classList.add('folded');
+    anims.forEach((a) => a.cancel());
+    // Clamp again now that the icon has a size (it is hidden until the first fold).
+    placeFab(parseFloat($('fab').style.left) || 0, parseFloat($('fab').style.top) || 0);
+    setDrawMode(false);
+    $('fab').animate([{ scale: '.3', opacity: 0 }, { scale: '1', opacity: 1 }], { duration: ms(260), easing: 'cubic-bezier(.3,1.6,.55,1)' });
+  } else {
+    await $('fab').animate([{ scale: '1', opacity: 1 }, { scale: '.6', opacity: 0 }], { duration: ms(120), easing: 'ease-in', fill: 'forwards' }).finished
+      .then((a) => setTimeout(() => a.cancel()));
+    root.classList.remove('folded');
+    setDrawMode(drawBeforeFold);
+    await Promise.all(foldParts().map((el) => el.animate([atFab(el), SHOWN], { duration: ms(320), easing: 'cubic-bezier(.2,.9,.3,1)' }).finished));
+  }
+  folding = false;
+  reportRects();
+}
+
+// Opening slides the toolbar up and the chat in from the right; closing plays it backwards.
+function openAnimation(reverse = false) {
+  const opts = { duration: ms(reverse ? 220 : 340), easing: reverse ? 'cubic-bezier(.55,0,.75,.2)' : 'cubic-bezier(.2,.9,.3,1)', fill: reverse ? 'forwards' : 'none' };
+  const play = (el, from) => el.animate(reverse ? [SHOWN, from] : [from, SHOWN], opts).finished;
+  return Promise.all([
+    play($('stageBox'), { ...SHOWN, opacity: 0 }),
+    play($('bar'), { ...SHOWN, translate: '0px 60px', opacity: 0 }),
+    play($('side'), { ...SHOWN, translate: '60px 0px', opacity: 0 }),
+  ]);
+}
+
+async function closeOverlay() {
+  if (document.documentElement.classList.contains('folded')) {
+    await $('fab').animate([{ scale: '1', opacity: 1 }, { scale: '.3', opacity: 0 }], { duration: ms(180), fill: 'forwards' }).finished;
+  } else {
+    await openAnimation(true);
+  }
+  if (native) native.post({ type: 'close' }); else window.close();
+}
+
+function placeFab(x, y) {
+  const fab = $('fab'), m = 8;
+  x = Math.max(m, Math.min(window.innerWidth - fab.offsetWidth - m, x));
+  y = Math.max(m, Math.min(window.innerHeight - fab.offsetHeight - m, y));
+  fab.style.left = `${x}px`; fab.style.top = `${y}px`;
+  return [x, y];
+}
+
+// Drag the icon to move it; a press without movement opens the overlay again.
+let fabDrag = null;
+$('fab').addEventListener('pointerdown', (e) => {
+  const r = $('fab').getBoundingClientRect();
+  fabDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top, x: e.clientX, y: e.clientY, moved: false };
+  $('fab').setPointerCapture(e.pointerId);
+  $('fab').classList.add('dragging');
+  if (native) native.post({ type: 'follow', on: true });  // the window follows the icon across screens
+  reportRects();
+});
+$('fab').addEventListener('pointermove', (e) => {
+  if (!fabDrag) return;
+  if (Math.hypot(e.clientX - fabDrag.x, e.clientY - fabDrag.y) > 4) fabDrag.moved = true;
+  if (fabDrag.moved) placeFab(e.clientX - fabDrag.dx, e.clientY - fabDrag.dy);
+});
+$('fab').addEventListener('pointerup', () => {
+  if (!fabDrag) return;
+  const moved = fabDrag.moved;
+  fabDrag = null;
+  $('fab').classList.remove('dragging');
+  if (native) native.post({ type: 'follow', on: false });
+  const r = $('fab').getBoundingClientRect();
+  store.set('doodle.fabPos', JSON.stringify([r.left, r.top]));
+  if (!moved) setFolded(false);
+  reportRects();
+});
+$('fab').addEventListener('lostpointercapture', () => { if (native) native.post({ type: 'follow', on: false }); });
+
+if (native) {
+  $('toOverlay').addEventListener('click', () => native.post({ type: 'switch', to: 'overlay' }));
+  $('toWindow').addEventListener('click', () => native.post({ type: 'switch', to: 'window' }));
+}
+
+if (OVERLAY) {
+  $('modeBtn').addEventListener('click', () => setDrawMode(!drawMode));
+  $('foldOverlay').addEventListener('click', () => setFolded(true));
+  $('fab').addEventListener('click', (e) => e.preventDefault());
+  requestAnimationFrame(() => {
+    let pos = null;
+    try { pos = JSON.parse(store.get('doodle.fabPos')); } catch {}
+    placeFab(...(Array.isArray(pos) ? pos : [window.innerWidth - 90, window.innerHeight / 2]));
+  });
+  $('closeOverlay').addEventListener('click', closeOverlay);
+  openAnimation();
+  setInterval(reportRects, 200);
+  setDrawMode(true);
+}
 
 fit();
 </script>

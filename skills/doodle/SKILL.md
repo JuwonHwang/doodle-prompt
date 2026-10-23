@@ -19,7 +19,8 @@ Data lives in `.doodle/` under the current working directory (it ignores itself 
 
 ## The loop
 
-1. **Start**: `doodle start`. It opens the canvas as its own app window (or reuses the one already open) and prints the URL. Tell the user the URL in one line and say you're listening.
+1. **Start**: `doodle start`. It shows the canvas in the doodle-prompt desktop app (bringing an open one forward) and prints the URL. If it says the app is not installed, tell the user the download link it prints and stop. Tell the user the URL in one line and say you're listening.
+   - `doodle start --overlay` shows it instead as a transparent sheet over the whole screen, for when the user wants to draw on top of what is open (an app, a page, a design). Use it when they ask for an overlay, full screen, or to mark up their screen. The page then matches the screen size, and sends from it print a `screen:` line: the image shows the user's screen under the strokes, but the screen is not an item. Place your marks relative to what you see there. `doodle start --window` goes back to the window; the user can also switch with a toolbar button.
 2. **Listen**: run `doodle wait` with Bash `run_in_background: true`. You're re-invoked when the user presses Send, and the conversation stays free while they draw. Never poll, and keep exactly one `wait` running: start a new one only after the previous one has exited.
 3. **Read**: the wait output gives the user's note, the image path, and every item with its id and bounds. Open the image with Read. Use both the picture (what it looks like) and the item list (exact positions, ids).
 4. **Interpret in context**: decide what the sketch means given the conversation and repo: a UI layout, a flow, a data model, an architecture, a game level, an annotation of something. Don't stack up questions; ask by drawing (see below).

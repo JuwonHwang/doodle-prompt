@@ -5,6 +5,7 @@
 
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -195,7 +196,7 @@ function serve() {
     const batch = pendingSends.splice(0);
     const result = {
       note: batch.map((s) => s.note).filter(Boolean).join('\n'),
-      png: SENT_PNG, version: state.version, sends: batch.length,
+      png: SENT_PNG, version: state.version, sends: batch.length, screen: batch[batch.length - 1].screen,
     };
     for (const w of [...waiters]) w(result);
     waiters.clear();
@@ -307,7 +308,8 @@ function serve() {
         writePng(SENT_PNG, body.png);
         writePng(CANVAS_PNG, body.png);
         const note = String(body.note || '').trim();
-        pendingSends.push({ note, at: Date.now() });
+        // `screen`: sent from the overlay with a capture of the user's screen under the strokes.
+        pendingSends.push({ note, at: Date.now(), screen: Boolean(body.screen) });
         fs.mkdirSync(SENDS_DIR, { recursive: true });
         const img = `${Date.now()}.png`;
         writePng(path.join(SENDS_DIR, img), body.png);
@@ -401,45 +403,37 @@ async function alive() {
   try { await api('GET', '/api/state'); return true; } catch { return false; }
 }
 
-function which(cmd) {
-  return (process.env.PATH || '').split(path.delimiter).some((dir) => {
-    try { fs.accessSync(path.join(dir, cmd), fs.constants.X_OK); return true; } catch { return false; }
-  });
+// The canvas is shown by the doodle-prompt desktop app (app/main.mjs, macOS and Windows), as a window
+// or as a transparent overlay over the whole screen. A checkout with Electron installed runs it
+// from source; DOODLE_APP points at another build.
+const RELEASES = 'https://github.com/JuwonHwang/doodle-prompt/releases/latest';
+
+function findApp() {
+  const custom = process.env.DOODLE_APP;
+  if (custom) return custom;
+  const root = path.join(HERE, '..');
+  const dev = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'electron.cmd' : 'electron');
+  if (fs.existsSync(dev) && fs.existsSync(path.join(root, 'app', 'main.mjs'))) return { dev, root };
+  const candidates =
+    process.platform === 'darwin' ? ['/Applications/doodle-prompt.app', path.join(os.homedir(), 'Applications', 'doodle-prompt.app')]
+    : process.platform === 'win32' ? [
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'doodle-prompt', 'doodle-prompt.exe'),
+      path.join(process.env.ProgramFiles || '', 'doodle-prompt', 'doodle-prompt.exe'),
+    ]
+    : [];
+  return candidates.find((c) => fs.existsSync(c)) || null;
 }
 
-// Open the canvas as a chromeless app window (Chrome/Edge `--app`) so it can sit beside the
-// terminal like a native window. Falls back to a normal browser tab.
-function openWindow(url, { tab = false } = {}) {
-  const appArgs = [`--app=${url}`, '--window-size=960,720'];
-  const isWsl = process.platform === 'linux' && /microsoft/i.test(fs.readFileSync('/proc/version', 'utf8'));
-  const run = (cmd, args, fallback) => {
-    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
-    child.on('error', () => fallback && fallback());
-    child.unref();
-  };
-  const plainTab = () => {
-    const [cmd, args] =
-      process.platform === 'darwin' ? ['open', [url]]
-      : process.platform === 'win32' || isWsl ? [isWsl ? 'cmd.exe' : 'cmd', ['/c', 'start', '', url]]
-      : ['xdg-open', [url]];
-    execFile(cmd, args, () => {});
-  };
-  if (tab) return plainTab();
-
-  if (process.env.DOODLE_BROWSER) return run(process.env.DOODLE_BROWSER, appArgs, plainTab);
-  if (process.platform === 'win32' || isWsl) {
-    // `start` resolves msedge/chrome through Windows' App Paths, so no install path is needed.
-    const browser = process.env.DOODLE_WINDOWS_BROWSER || 'msedge';
-    return execFile(isWsl ? 'cmd.exe' : 'cmd', ['/c', 'start', '', browser, ...appArgs], (err) => err && plainTab());
-  }
-  if (process.platform === 'darwin') {
-    const app = ['Google Chrome', 'Microsoft Edge', 'Chromium', 'Brave Browser', 'Arc']
-      .find((name) => fs.existsSync(`/Applications/${name}.app`));
-    return app ? run('open', ['-na', app, '--args', ...appArgs], plainTab) : plainTab();
-  }
-  const bin = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge', 'brave-browser']
-    .find(which);
-  return bin ? run(bin, appArgs, plainTab) : plainTab();
+function launchApp(url, mode) {
+  const app = findApp();
+  if (!app) throw new Error(`the doodle-prompt app is not installed. Download it from ${RELEASES}, then run start again`);
+  const args = [`--doodle-url=${url}`, ...(mode ? [`--doodle-mode=${mode}`] : [])];
+  const [cmd, argv, shell] =
+    typeof app === 'object' ? [app.dev, [app.root, ...args], process.platform === 'win32']
+    // `open -n` starts a second instance, which hands its arguments to the running one and exits.
+    : app.endsWith('.app') ? ['open', ['-n', '-a', app, '--args', ...args], false]
+    : [app, args, false];
+  spawn(cmd, argv, { detached: true, stdio: 'ignore', shell }).unref();
 }
 
 async function start(flags) {
@@ -455,10 +449,10 @@ async function start(flags) {
     if (!(await alive())) throw new Error(`server failed to start; see ${path.join(DATA_DIR, 'server.log')}`);
   }
   const { url } = readServerInfo();
-  const { viewers } = await api('GET', '/api/state');
   if (!flags['no-open']) {
-    if (viewers > 0 && !flags.force) console.log('Canvas window is already open.');
-    else { await api('POST', '/api/opening'); openWindow(url, { tab: Boolean(flags.tab) }); }
+    // The app brings an open canvas forward instead of opening a second one.
+    await api('POST', '/api/opening');
+    launchApp(url, flags.overlay ? 'overlay' : flags.window ? 'window' : null);
   }
   console.log(`Canvas: ${url}`);
   console.log(`Data:   ${DATA_DIR}`);
@@ -497,6 +491,7 @@ async function report(r) {
   console.log(`The user sent the canvas${r.sends > 1 ? ` (${r.sends} sends)` : ''}.`);
   console.log(`note: ${r.note || '(none)'}`);
   console.log(`image: ${r.png}`);
+  if (r.screen) console.log("screen: sent from the overlay; the image shows the user's screen under the strokes (the screen itself is not an item)");
   console.log(describe(state));
 }
 
@@ -539,7 +534,7 @@ async function draw(arg) {
   const r = await api('POST', '/api/ops', { ...body, author: 'claude' });
   const snap = await api('GET', `/api/snapshot-wait?version=${r.version}&timeout=5`);
   console.log(`added: ${r.ids.join(', ') || '(none)'}  version ${r.version}`);
-  console.log(snap.ok ? `rendered: ${snap.png}` : 'rendered: (no browser tab open; snapshot not refreshed)');
+  console.log(snap.ok ? `rendered: ${snap.png}` : 'rendered: (no canvas open; snapshot not refreshed)');
 }
 
 function parseFlags(argv) {
@@ -557,8 +552,9 @@ function parseFlags(argv) {
 }
 
 const USAGE = `usage: doodle-prompt <command>
-  start [--tab|--no-open|--force]
-                         start the canvas server and open it as an app window
+  start [--overlay|--window|--no-open]
+                         start the canvas server and show it in the doodle-prompt app
+                         (--overlay: a transparent sheet over the whole screen; --window: a window)
   wait [--timeout s]     block until the user presses "Send to Claude"
   check                  print a send that arrived while nobody was waiting, if any
   state                  list every item on the canvas with its id and bounds
