@@ -10,6 +10,8 @@
 
 English | [한국어](README.ko.md)
 
+<img src="docs/demo.gif" width="860" alt="A rough pipeline sketch is sent to Claude, which redraws it as connected boxes, asks what model goes at the end, and adds a two-tower model with a ranking loss">
+
 </div>
 
 ---
@@ -72,7 +74,7 @@ Pen, shapes, arrows, text, a paint bucket, Paint-style selection (move, scale, f
 
 **2. Install the app** from the [latest release](https://github.com/JuwonHwang/doodle-prompt/releases/latest): the `.dmg` for macOS, the `Setup .exe` for Windows.
 
-**3. Say `/doodle`** (or just "let me draw it"). Start drawing.
+**3. Say `/doodle`** (or just "let me draw it"). Start drawing. The first time, a five-step tour shows you around; the **?** in the chat panel plays it again.
 
 > The app builds are not code-signed yet. On macOS, right-click the app → **Open** the first time; on Windows, choose **Run anyway** in SmartScreen. The plugin needs Node.js 18+.
 
@@ -104,7 +106,7 @@ npx doodle-prompt draw -  # draw shapes from JSON on stdin
 <details>
 <summary><b>Run from source</b></summary>
 
-`npm install`, and the plugin's `start` uses the local Electron automatically. `npm run dist` builds the installers into `dist/`. `DOODLE_APP` points `start` at another build of the app.
+`npm install`, and the plugin's `start` uses the local Electron automatically. `node scripts/demo.mjs` re-records the intro video into `docs/` (needs Node 22+, Google Chrome and ffmpeg). `npm run dist` builds the installers into `dist/`. `DOODLE_APP` points `start` at another build of the app.
 
 ```
 src/doodle.mjs                    canvas server + CLI, launches the app

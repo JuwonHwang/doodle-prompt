@@ -10,6 +10,8 @@
 
 [English](README.md) | 한국어
 
+<img src="docs/demo.gif" width="860" alt="대충 그린 파이프라인을 Claude에게 보내자, Claude가 연결된 상자로 다시 그리고 마지막 모델을 묻고, 투 타워 모델과 랭킹 손실을 덧붙이는 장면">
+
 </div>
 
 ---
@@ -72,7 +74,7 @@ Claude:  … → [조인] → [투 타워 모델] → [랭킹 손실]   ✓ 구�
 
 **2. 앱 설치**: [최신 릴리스](https://github.com/JuwonHwang/doodle-prompt/releases/latest)에서 macOS는 `.dmg`, Windows는 `Setup .exe`를 받으세요.
 
-**3. `/doodle` 입력** (또는 "그려서 보여줄게"). 이제 그리면 돼요.
+**3. `/doodle` 입력** (또는 "그려서 보여줄게"). 이제 그리면 돼요. 처음 열면 다섯 단계짜리 안내가 나오고, 채팅 패널의 **?** 버튼으로 다시 볼 수 있어요.
 
 > 앱 빌드에는 아직 코드 서명이 없어요. macOS에서는 처음 실행할 때 앱을 우클릭해 **열기**를 선택하고, Windows에서는 SmartScreen에서 **실행**을 선택해 주세요. 플러그인에는 Node.js 18 이상이 필요해요.
 
@@ -104,7 +106,7 @@ npx doodle-prompt draw -  # 표준 입력으로 받은 JSON 도형 그리기
 <details>
 <summary><b>소스에서 실행</b></summary>
 
-`npm install`을 실행하면 플러그인의 `start`가 로컬 Electron으로 앱을 열어요. `npm run dist`는 설치 파일을 `dist/`에 만들어요. 다른 앱 빌드를 쓰려면 `DOODLE_APP`에 경로를 지정하세요.
+`npm install`을 실행하면 플러그인의 `start`가 로컬 Electron으로 앱을 열어요. `node scripts/demo.mjs`는 소개 영상을 `docs/`에 다시 녹화해요(Node 22 이상, Google Chrome, ffmpeg 필요). `npm run dist`는 설치 파일을 `dist/`에 만들어요. 다른 앱 빌드를 쓰려면 `DOODLE_APP`에 경로를 지정하세요.
 
 ```
 src/doodle.mjs                    캔버스 서버 + CLI, 앱 실행

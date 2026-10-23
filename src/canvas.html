@@ -273,6 +273,24 @@
   #confirmBox button[value="ok"] { background: var(--coral); color: #141414; }
   @media (max-width: 720px) { .sep { display: none; } }
 
+  /* ---------- first-run tour: a spotlight on one part of the page and a card that explains it */
+  #side header #helpBtn:hover { background: var(--hover); }
+  #tour { position: fixed; inset: 0; z-index: 20; }
+  #tour[hidden] { display: none; }
+  #tourSpot { position: fixed; border-radius: 14px; border: 3px solid var(--marker); pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(20,20,20,.5); transition: top .32s cubic-bezier(.2,.9,.3,1), left .32s cubic-bezier(.2,.9,.3,1), width .32s cubic-bezier(.2,.9,.3,1), height .32s cubic-bezier(.2,.9,.3,1); }
+  #tourCard { position: fixed; width: 310px; max-width: calc(100vw - 32px); padding: 16px 18px 14px; color: var(--ink); background: var(--chrome);
+    border: var(--b) solid var(--edge); border-radius: 14px; box-shadow: 5px 5px 0 var(--drop); transition: top .32s ease, left .32s ease; }
+  #tourCard.enter { animation: boing .45s cubic-bezier(.3,1.7,.5,1); }
+  #tourStep { margin: 0; font-size: 12px; font-weight: 800; color: var(--muted); }
+  #tourTitle { margin: 2px 0 6px; font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+  #tourText { margin: 0 0 14px; }
+  #tourCard .row { display: flex; gap: 8px; align-items: center; }
+  #tourCard .grow { flex: 1; }
+  #tourSkip { color: var(--muted); padding: 0 6px; }
+  #tourNext { background: var(--marker); color: #141414; }
+  @media (prefers-reduced-motion: reduce) { #tourSpot, #tourCard { transition: none; } #tourCard.enter { animation: none; } }
+
   /* ---------- overlay: a transparent sheet over the whole screen (desktop app, `start --overlay`).
      The page is the screen; the toolbar and chat float over it. */
   .overlay-only { display: none !important; }
@@ -339,6 +357,7 @@
   <symbol id="i-listening" viewBox="0 0 24 24"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></symbol>
   <symbol id="i-overlay" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 7-6"/></symbol>
   <symbol id="i-window" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/><path d="M6 4v5"/><path d="M10 4v5"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
   <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
   <symbol id="i-click" viewBox="0 0 24 24"><path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.04 9.69a.5.5 0 0 1 .65-.65l11 4.5a.5.5 0 0 1-.07.95l-4.35 1.04a1 1 0 0 0-.74.74l-1.04 4.35a.5.5 0 0 1-.95.07z"/></symbol>
   <symbol id="i-busy"viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></symbol>
@@ -428,6 +447,7 @@
 <aside id="side" aria-label="Chat with the agent">
   <div id="sideGrip" role="separator" aria-orientation="vertical" aria-label="Resize chat panel" title="Drag to resize · double-click to reset" tabindex="0"></div>
   <header><button id="sideToggle" class="hbtn" aria-expanded="true" title="Collapse chat (C)" aria-label="Collapse chat panel"><svg class="ic sm" aria-hidden="true"><use href="#i-collapse"/></svg></button><svg class="ic" aria-hidden="true"><use href="#i-agent"/></svg><b>Agent</b>
+  <button id="helpBtn" class="hbtn" title="Show the tour" aria-label="Show the tour"><svg class="ic sm" aria-hidden="true"><use href="#i-help"/></svg></button>
   <button id="clearChat" class="hbtn" title="Clear chat history and saved sketches" aria-label="Clear chat history"><svg class="ic sm" aria-hidden="true"><use href="#i-clear"/></svg></button>
   <div id="status" role="status" title="Agent is busy · sends are kept"><svg class="ic on-icon" aria-hidden="true"><use href="#i-listening"/></svg><svg class="ic off-icon" aria-hidden="true"><use href="#i-busy"/></svg><span class="sr">Agent is busy · sends are kept</span></div>
   </header>
@@ -440,7 +460,16 @@
 </aside>
 </div>
 <button id="fab" title="Open the overlay (drag to move)" aria-label="Open the overlay"><img src="/icon.svg" alt=""></button>
-<dialog id="viewer"aria-label="Sent sketch"><form method="dialog"><button aria-label="Close"><img id="viewerImg" alt="Sent sketch"></button></form></dialog>
+<div id="tour" hidden>
+  <div id="tourSpot"></div>
+  <div id="tourCard" role="dialog" aria-modal="true" aria-labelledby="tourTitle" aria-describedby="tourText">
+    <p id="tourStep"></p>
+    <h2 id="tourTitle"></h2>
+    <p id="tourText"></p>
+    <div class="row"><button id="tourSkip">Skip</button><span class="grow"></span><button id="tourBack" class="chunky">Back</button><button id="tourNext" class="chunky">Next</button></div>
+  </div>
+</div>
+<dialog id="viewer" aria-label="Sent sketch"><form method="dialog"><button aria-label="Close"><img id="viewerImg" alt="Sent sketch"></button></form></dialog>
 <dialog id="confirmBox">
   <h2>doodle-prompt</h2>
   <p id="confirmText"></p>
@@ -471,6 +500,7 @@ const hiddenLayers = new Set();  // layer ids hidden on this screen
 let activeLayer = null;          // layer new strokes go on; the top layer until the user picks one
 let pending = [];            // strokes posted but not yet echoed back: {item, version}
 let erasing = null;          // Set of ids hidden locally during an eraser drag
+let editingId = null;        // item whose text is open in the text box
 
 // ---------------------------------------------------------------- layout
 
@@ -751,7 +781,12 @@ function paint(c, k, forSnapshot = false) {
   if (!forSnapshot && !OVERLAY) { c.fillStyle = dotPattern(c); c.fillRect(0, 0, canvasSize.width, canvasSize.height); }
   const items = visibleItems(forSnapshot);
   const now = performance.now();
-  for (const it of items) forSnapshot ? drawItem(c, it) : drawPopping(c, it, now);
+  for (const it of items) {
+    if (forSnapshot) { drawItem(c, it); continue; }
+    // The label being edited is drawn by the text box over it, not twice.
+    if (it.id === editingId) { if (it.type !== 'text') drawPopping(c, { ...it, text: '' }, now); continue; }
+    drawPopping(c, it, now);
+  }
   if (forSnapshot) return;
   if (drawing && drawing.type === 'arrow' && (drawing.from || drawing.to)) {
     // Outline the shapes the arrow will connect to.
@@ -1361,7 +1396,6 @@ function growTextInput() {
 }
 
 // `edit` reopens an existing item's text (a text item, or a shape's label) instead of adding one.
-let editingId = null;
 function openTextInput(p, edit = null) {
   textAt = p;
   editingId = edit ? edit.id : null;
@@ -1373,6 +1407,7 @@ function openTextInput(p, edit = null) {
   textInput.style.color = edit ? edit.color : color;
   textInput.style.display = 'block';
   growTextInput();
+  if (editingId) render();  // hide the label under the box
   setTimeout(() => textInput.focus(), 0);
 }
 function commitText() {
@@ -1416,7 +1451,7 @@ paper.addEventListener('dblclick', (e) => {
 textInput.addEventListener('input', growTextInput);
 textInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); commitText(); }
-  if (e.key === 'Escape') { textAt = null; editingId = null; textInput.style.display = 'none'; }
+  if (e.key === 'Escape') { textAt = null; editingId = null; textInput.style.display = 'none'; render(); }
 });
 // Clicking anywhere else places the text, except the size slider, which resizes it in place.
 textInput.addEventListener('blur', (e) => { if (e.relatedTarget !== $('width')) commitText(); });
@@ -2115,6 +2150,85 @@ if (OVERLAY) {
   setInterval(reportRects, 200);
   setDrawMode(true);
 }
+
+// ---------------------------------------------------------------- first-run tour
+// Five short steps the first time the canvas opens in a window (replay with the ? in the chat
+// header): where to draw, the shape tools, Send, where the agent answers, capture and overlay.
+const TOUR = [
+  { el: () => $('stageBox'), title: "Draw what's in your head",
+    text: "Boxes, arrows, a rough scribble: a model, a pipeline, a screen. It doesn't have to be neat." },
+  { el: () => document.querySelector('#bar .group[aria-label="Shapes"]'), title: 'Arrows that stick',
+    text: 'Start an arrow on one box and end it on another, and it follows when you move either one. Double-click any label to edit it.' },
+  { el: () => $('send'), title: 'Send it to Claude',
+    text: 'Add a few words if you like; you don\'t have to. Ctrl/⌘+Enter sends too.' },
+  { el: () => ($('side').classList.contains('collapsed') ? $('side') : $('chat')), title: 'Claude answers in violet',
+    text: 'It says what it understood and asks Yes or Not quite, then draws back on the same canvas. "Looking at your sketch" means it is on it.' },
+  { el: () => document.querySelector('#bar .group[aria-label="Capture"]'), app: true, title: 'Draw on your screen',
+    text: 'The camera button puts a screenshot on the canvas so you can mark it up. The screen button next to it turns your whole screen into the canvas.' },
+];
+let tourSteps = [], tourAt = -1;
+
+function placeTour() {
+  const step = tourSteps[tourAt], target = step && step.el();
+  if (!target) return;
+  const r = target.getBoundingClientRect(), pad = 6;
+  const spot = $('tourSpot'), card = $('tourCard');
+  Object.assign(spot.style, { left: `${r.left - pad}px`, top: `${r.top - pad}px`, width: `${r.width + pad * 2}px`, height: `${r.height + pad * 2}px` });
+  // Below the target if it fits, else above, else beside it; always inside the window.
+  const cw = card.offsetWidth, ch = card.offsetHeight, gap = 14, W = window.innerWidth, H = window.innerHeight;
+  let top = r.bottom + pad + gap <= H - ch - 16 ? r.bottom + pad + gap : r.top - pad - gap - ch;
+  let left = r.left + r.width / 2 - cw / 2;
+  if (top < 16) { top = r.top + r.height / 2 - ch / 2; left = r.left - pad - gap - cw >= 16 ? r.left - pad - gap - cw : r.right + pad + gap; }
+  if (r.height > H * 0.6 && r.width > W * 0.5) { top = r.top + 40; left = r.left + 40; }  // a big target: sit inside it
+  card.style.top = `${Math.max(16, Math.min(H - ch - 16, top))}px`;
+  card.style.left = `${Math.max(16, Math.min(W - cw - 16, left))}px`;
+}
+
+function showTourStep(i) {
+  tourAt = i;
+  const step = tourSteps[i];
+  $('tourStep').textContent = `${i + 1} / ${tourSteps.length}`;
+  $('tourTitle').textContent = step.title;
+  $('tourText').textContent = step.text;
+  $('tourBack').disabled = i === 0;
+  $('tourBack').style.visibility = i === 0 ? 'hidden' : 'visible';
+  $('tourNext').textContent = i === tourSteps.length - 1 ? 'Start drawing' : 'Next';
+  const card = $('tourCard');
+  card.classList.remove('enter'); void card.offsetWidth; card.classList.add('enter');
+  placeTour();
+  $('tourNext').focus();
+}
+
+function startTour() {
+  tourSteps = TOUR.filter((s) => (!s.app || native) && s.el());
+  if (!tourSteps.length) return;
+  $('tour').hidden = false;
+  showTourStep(0);
+}
+
+function endTour() {
+  $('tour').hidden = true;
+  tourAt = -1;
+  store.set('doodle.tourDone', '1');
+  paper.focus();
+}
+
+$('tourNext').addEventListener('click', () => (tourAt < tourSteps.length - 1 ? showTourStep(tourAt + 1) : endTour()));
+$('tourBack').addEventListener('click', () => tourAt > 0 && showTourStep(tourAt - 1));
+$('tourSkip').addEventListener('click', endTour);
+$('helpBtn').addEventListener('click', startTour);
+window.addEventListener('resize', () => { if (tourAt >= 0) placeTour(); });
+// While the tour is open its keys win: arrows step through it, Esc closes it, nothing reaches the canvas.
+document.addEventListener('keydown', (e) => {
+  if (tourAt < 0) return;
+  if (e.key === 'Escape') endTour();
+  else if (e.key === 'ArrowRight') $('tourNext').click();
+  else if (e.key === 'ArrowLeft') $('tourBack').click();
+  else if (e.key !== 'Tab' && e.key !== 'Enter' && e.key !== ' ') { /* swallow */ }
+  else return;
+  e.preventDefault(); e.stopImmediatePropagation();
+}, true);
+if (!OVERLAY && !store.get('doodle.tourDone')) setTimeout(startTour, 600);
 
 fit();
 </script>
